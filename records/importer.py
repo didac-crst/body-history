@@ -7,12 +7,13 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.utils import timezone
 from openpyxl import load_workbook
 
-from .metrics import convert_fraction_to_percent
+from .metrics import convert_fraction_to_percent, local_date
 from .models import ImportBatch, Measurement, MeasurementImportRow, Profile
 
 logger = logging.getLogger(__name__)
@@ -301,6 +302,44 @@ def report_to_dict(report: DryRunReport) -> dict:
     }
 
 
+def _existing_import_measurement(profile: Profile, parsed: ParsedRow) -> Measurement | None:
+    """Find a previously imported measurement that matches this workbook row."""
+    if parsed.measured_at is None:
+        return None
+    existing = (
+        Measurement.objects.filter(
+            profile=profile,
+            source=Measurement.SOURCE_IMPORT,
+            measured_at=parsed.measured_at,
+        )
+        .order_by("created_at")
+        .first()
+    )
+    if existing:
+        return existing
+    # Fallback when timestamps were normalised differently but the Excel row is the same day.
+    if parsed.source_row is None:
+        return None
+    local = local_date(parsed.measured_at, profile.timezone)
+    profile_tz = ZoneInfo(profile.timezone)
+    day_start = timezone.make_aware(
+        datetime.combine(local, datetime.min.time()),
+        profile_tz,
+    )
+    day_end = day_start + timezone.timedelta(days=1)
+    return (
+        Measurement.objects.filter(
+            profile=profile,
+            source=Measurement.SOURCE_IMPORT,
+            measured_at__gte=day_start,
+            measured_at__lt=day_end,
+            legacy_payload__source_row=parsed.source_row,
+        )
+        .order_by("created_at")
+        .first()
+    )
+
+
 @transaction.atomic
 def import_workbook(profile: Profile, path: Path, report: DryRunReport | None = None) -> ImportBatch:
     path = Path(path)
@@ -327,6 +366,7 @@ def import_workbook(profile: Profile, path: Path, report: DryRunReport | None = 
 
     accepted = 0
     rejected = 0
+    skipped = 0
     for parsed in report.rows:
         if not parsed.ok:
             MeasurementImportRow.objects.create(
@@ -338,6 +378,20 @@ def import_workbook(profile: Profile, path: Path, report: DryRunReport | None = 
                 error_message="; ".join(parsed.errors),
             )
             rejected += 1
+            continue
+
+        prior = _existing_import_measurement(profile, parsed)
+        if prior is not None:
+            MeasurementImportRow.objects.create(
+                import_batch=batch,
+                source_sheet=SOURCE_SHEET,
+                source_row=parsed.source_row,
+                raw_payload=parsed.raw_payload,
+                measurement=prior,
+                status=MeasurementImportRow.STATUS_SKIPPED,
+                error_message="Already imported for this profile (row-level idempotency).",
+            )
+            skipped += 1
             continue
 
         legacy = {
@@ -366,5 +420,8 @@ def import_workbook(profile: Profile, path: Path, report: DryRunReport | None = 
 
     batch.accepted_count = accepted
     batch.rejected_count = rejected
-    batch.save(update_fields=["accepted_count", "rejected_count"])
+    meta = dict(batch.metadata or {})
+    meta["skipped_count"] = skipped
+    batch.metadata = meta
+    batch.save(update_fields=["accepted_count", "rejected_count", "metadata"])
     return batch

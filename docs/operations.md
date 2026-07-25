@@ -102,7 +102,7 @@ flowchart TD
   place["Place workbook under<br/>data imports directory"] --> ui["Sign in → Excel import"]
   ui --> dry["Dry run"]
   dry --> review["Review verification report"]
-  review --> import["Import<br/>idempotent by file hash"]
+  review --> import["Import<br/>file hash + row-level skip"]
 ```
 
 1. Place the workbook at `/srv/satellite/data/body-history/imports/Pes.xlsx` (outside git).
@@ -134,6 +134,9 @@ Still requires Django login; trusted-device cookie avoids repeated passwords on
 known phones. Shows the profile display name in the header.
 
 ## Tests
+
+Use **pytest** only. `python manage.py test` reports zero tests — the suite is
+pytest-based under `records/tests/`, not Django’s `TestCase` discovery.
 
 ```sh
 docker compose run --rm --entrypoint "" -e BODY_HISTORY_USE_SQLITE=1 body-history pytest

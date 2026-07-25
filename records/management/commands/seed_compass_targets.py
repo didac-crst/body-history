@@ -7,10 +7,10 @@ Personal values must be passed as CLI arguments — never hard-coded here.
 from datetime import date, timedelta
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-
-from django.contrib.auth import get_user_model
 
 from records.models import ProfileTarget
 from records.profiles import get_or_create_default_profile
@@ -62,13 +62,7 @@ class Command(BaseCommand):
             if lo > hi:
                 raise CommandError(f"{label} min must be <= max")
 
-        if options["close_previous"]:
-            for target in profile.targets.filter(valid_to__isnull=True):
-                if target.valid_from < valid_from:
-                    target.valid_to = valid_from - timedelta(days=1)
-                    target.save(update_fields=["valid_to", "updated_at"])
-
-        target = ProfileTarget.objects.create(
+        target = ProfileTarget(
             profile=profile,
             valid_from=valid_from,
             weight_min_kg=options["weight_min"],
@@ -78,4 +72,16 @@ class Command(BaseCommand):
             muscle_min_percent=options["muscle_min"],
             muscle_max_percent=options["muscle_max"],
         )
+        # Close + create share this atomic block (handle is @transaction.atomic):
+        # failed validation rolls back any closed previous rows.
+        if options["close_previous"]:
+            for previous in profile.targets.filter(valid_to__isnull=True):
+                if previous.valid_from < valid_from:
+                    previous.valid_to = valid_from - timedelta(days=1)
+                    previous.save(update_fields=["valid_to", "updated_at"])
+        try:
+            target.full_clean()
+        except ValidationError as exc:
+            raise CommandError("; ".join(exc.messages)) from exc
+        target.save()
         self.stdout.write(self.style.SUCCESS(f"Created ProfileTarget {target.id}"))

@@ -65,9 +65,20 @@ docker compose exec body-history python manage.py manage_body_user list
 ## Settings surface
 
 - **Profile** — single editor for the signed-in user’s body profile.
-- **Body Compass targets** — versioned ranges (DB only).
+- **Body Compass targets** — versioned ranges (DB only); overlapping
+  `valid_from`/`valid_to` intervals are rejected per profile.
 - **Compass algorithm** — optional soft/hard / weight prefs.
 - **Trusted devices** — revoke one or all.
+
+## Import and Compass robustness
+
+- Excel import remains skip-on-identical **file hash**, and also skips rows that
+  already exist for the profile (same `measured_at`, or same calendar day +
+  `legacy_payload.source_row`) so workbook edits during migration do not
+  duplicate history.
+- Target Alignment / opportunities / signals use the **30-day trend averages**
+  when available, falling back to the latest raw reading only when needed.
+- Tests: use **pytest** only (`manage.py test` finds nothing).
 
 ## Related docs
 

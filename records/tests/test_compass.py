@@ -204,6 +204,41 @@ def test_personal_targets_loaded_from_db_not_constants(profile, target):
     assert "72.00" not in source
 
 
+def test_compass_scores_smoothed_trend_not_latest_spike(profile, target):
+    from records.compass import effective_target_ranges
+
+    now = timezone.now()
+    for i in range(10):
+        Measurement.objects.create(
+            profile=profile,
+            measured_at=now - timedelta(days=i + 1),
+            weight_kg=Decimal("72.50"),
+            body_fat_percent=Decimal("15.50"),
+            muscle_percent=Decimal("38.50"),
+        )
+    Measurement.objects.create(
+        profile=profile,
+        measured_at=now,
+        weight_kg=Decimal("90.00"),
+        body_fat_percent=Decimal("15.50"),
+        muscle_percent=Decimal("38.50"),
+    )
+    snap = evaluate_compass(profile)
+    ranges = effective_target_ranges(target)
+    spike_comps = component_scores(
+        weight_kg=Decimal("90.00"),
+        body_fat_percent=Decimal("15.50"),
+        muscle_percent=Decimal("38.50"),
+        **ranges,
+    )
+    spike_align, _ = overall_alignment(spike_comps)
+    assert snap.alignment is not None
+    assert spike_align is not None
+    assert snap.alignment > spike_align
+    assert snap.trend["weight_kg"] is not None
+    assert snap.trend["weight_kg"] < 80
+
+
 def test_compass_post_save_full_data(client, user, profile, target):
     client.force_login(user)
     # prior points for trend

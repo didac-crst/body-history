@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from decimal import Decimal
 
 from django.conf import settings
@@ -6,6 +7,15 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+
+
+def target_date_ranges_overlap(
+    a_from: date, a_to: date | None, b_from: date, b_to: date | None
+) -> bool:
+    """Inclusive date ranges overlap when both ends may be open (None = unbounded)."""
+    a_end = a_to if a_to is not None else date.max
+    b_end = b_to if b_to is not None else date.max
+    return a_from <= b_end and b_from <= a_end
 
 
 class TimeStampedModel(models.Model):
@@ -123,6 +133,23 @@ class ProfileTarget(TimeStampedModel):
         )
         if not configured and not legacy:
             raise ValidationError("Configure at least one target dimension.")
+        self._validate_no_overlap()
+
+    def _validate_no_overlap(self) -> None:
+        # Skip until profile is assigned (ModelForm validates fields before the view sets it).
+        if not self.profile_id or self.valid_from is None:
+            return
+        others = ProfileTarget.objects.filter(profile_id=self.profile_id)
+        if self.pk:
+            others = others.exclude(pk=self.pk)
+        for other in others:
+            if target_date_ranges_overlap(
+                self.valid_from, self.valid_to, other.valid_from, other.valid_to
+            ):
+                raise ValidationError(
+                    "This target version overlaps an existing version for this profile. "
+                    "Adjust valid_from/valid_to so ranges do not overlap."
+                )
 
     def __str__(self) -> str:
         return f"{self.profile} from {self.valid_from}"

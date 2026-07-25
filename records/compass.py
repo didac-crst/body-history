@@ -203,10 +203,19 @@ def evaluate_compass(
     if target is None or not any(ranges.values()):
         notes.append("Configure target ranges in Settings to unlock Target Alignment.")
 
+    # Score/recommendations from smoothed recent position; fall back to latest when needed.
+    def _current(attr: str, latest_val):
+        trend_val = trend_average(profile, attr, end=at, days=trend_days)
+        return trend_val if trend_val is not None else latest_val
+
+    current_weight = _current("weight_kg", latest.weight_kg)
+    current_fat = _current("body_fat_percent", latest.body_fat_percent)
+    current_muscle = _current("muscle_percent", latest.muscle_percent)
+
     comps = component_scores(
-        weight_kg=latest.weight_kg,
-        body_fat_percent=latest.body_fat_percent,
-        muscle_percent=latest.muscle_percent,
+        weight_kg=current_weight,
+        body_fat_percent=current_fat,
+        muscle_percent=current_muscle,
         algorithm=algo,
         **ranges,
     )
@@ -249,17 +258,17 @@ def evaluate_compass(
     days_since = (timezone.localdate() - local_date(latest.measured_at, profile.timezone)).days
     recent_count = count_recent(profile, days=trend_days)
     variability = recent_variability(profile, "weight_kg", days=trend_days)
-    has_fat = latest.body_fat_percent is not None
-    has_muscle = latest.muscle_percent is not None
+    has_fat = current_fat is not None
+    has_muscle = current_muscle is not None
     composition_available = has_fat and has_muscle
 
     if recent_count < 3:
         notes.append("Trend guidance needs more recent measurements.")
 
     opportunities = rank_opportunities(
-        weight_kg=latest.weight_kg,
-        body_fat_percent=latest.body_fat_percent,
-        muscle_percent=latest.muscle_percent,
+        weight_kg=current_weight,
+        body_fat_percent=current_fat,
+        muscle_percent=current_muscle,
         target=ranges,
         composition_available=composition_available,
         algorithm=algo,
@@ -287,19 +296,15 @@ def evaluate_compass(
     )
     signals = fitness_signals(
         height_cm=profile.height_cm,
-        weight_kg=latest.weight_kg,
-        body_fat_percent=latest.body_fat_percent,
+        weight_kg=current_weight,
+        body_fat_percent=current_fat,
         target=ranges,
     )
 
     trend = {
-        "weight_kg": float(v) if (v := trend_average(profile, "weight_kg", days=trend_days)) is not None else None,
-        "body_fat_percent": float(v)
-        if (v := trend_average(profile, "body_fat_percent", days=trend_days)) is not None
-        else None,
-        "muscle_percent": float(v)
-        if (v := trend_average(profile, "muscle_percent", days=trend_days)) is not None
-        else None,
+        "weight_kg": float(current_weight) if current_weight is not None else None,
+        "body_fat_percent": float(current_fat) if current_fat is not None else None,
+        "muscle_percent": float(current_muscle) if current_muscle is not None else None,
         "window_days": trend_days,
     }
 

@@ -11,6 +11,8 @@ from django.contrib import messages
 from django.contrib.auth import logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
+from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -625,14 +627,21 @@ def settings_view(request):
         if target_form.is_valid():
             target = target_form.save(commit=False)
             target.profile = profile
-            # Close open previous versions the day before the new one starts.
-            for previous in profile.targets.filter(valid_to__isnull=True):
-                if previous.valid_from < target.valid_from:
-                    previous.valid_to = target.valid_from - timedelta(days=1)
-                    previous.save(update_fields=["valid_to", "updated_at"])
-            target.save()
-            messages.success(request, "Target version saved.")
-            return redirect("settings")
+            try:
+                # Close + create must succeed or roll back together so a failed
+                # full_clean does not leave previous targets permanently shortened.
+                with transaction.atomic():
+                    for previous in profile.targets.filter(valid_to__isnull=True):
+                        if previous.valid_from < target.valid_from:
+                            previous.valid_to = target.valid_from - timedelta(days=1)
+                            previous.save(update_fields=["valid_to", "updated_at"])
+                    target.full_clean()
+                    target.save()
+            except ValidationError as exc:
+                target_form.add_error(None, exc)
+            else:
+                messages.success(request, "Target version saved.")
+                return redirect("settings")
     if request.method == "POST" and "save_prefs" in request.POST:
         prefs_form = CompassPreferencesForm(request.POST, prefix="prefs", instance=prefs)
         if prefs_form.is_valid():

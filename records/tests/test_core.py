@@ -207,6 +207,111 @@ def test_importer_records_invalid_rows_and_is_idempotent(tmp_path, profile):
     assert profile.measurements.count() == 2
 
 
+def test_importer_row_idempotent_when_workbook_changes(tmp_path, profile):
+    path = _sample_workbook(tmp_path)
+    batch1 = import_workbook(profile, path)
+    assert batch1.accepted_count == 2
+    assert profile.measurements.count() == 2
+
+    # Changing the file changes the hash; previously this re-created all rows.
+    from openpyxl import load_workbook
+
+    wb = load_workbook(path)
+    ws = wb["General"]
+    ws.append(
+        [
+            datetime(2020, 1, 15),
+            76.5,
+            0.205,
+            "=B5*C5",
+            "=B5/(F5)^2",
+            1.81,
+            0.395,
+            "=1",
+            "=1",
+            "=1",
+            "=1",
+            0,
+            "=YEAR(A5)",
+        ]
+    )
+    wb.save(path)
+
+    batch2 = import_workbook(profile, path)
+    assert batch2.id != batch1.id
+    assert batch2.accepted_count == 1
+    assert batch2.metadata.get("skipped_count") == 2
+    assert batch2.rows.filter(status="skipped").count() == 2
+    assert profile.measurements.count() == 3
+
+
+def test_target_versions_reject_overlap(profile):
+    from django.core.exceptions import ValidationError
+
+    first = ProfileTarget(
+        profile=profile,
+        valid_from=date(2020, 1, 1),
+        valid_to=date(2022, 12, 31),
+        target_bmi=Decimal("23.00"),
+    )
+    first.full_clean()
+    first.save()
+
+    overlapping = ProfileTarget(
+        profile=profile,
+        valid_from=date(2022, 6, 1),
+        valid_to=date(2023, 12, 31),
+        target_bmi=Decimal("22.00"),
+    )
+    with pytest.raises(ValidationError, match="overlaps"):
+        overlapping.full_clean()
+
+    adjacent = ProfileTarget(
+        profile=profile,
+        valid_from=date(2023, 1, 1),
+        target_bmi=Decimal("22.00"),
+    )
+    adjacent.full_clean()
+    adjacent.save()
+
+
+def test_settings_target_save_rolls_back_close_on_validation_error(client, user, profile):
+    """Failed overlap validation must not permanently shorten an open target."""
+    open_target = ProfileTarget.objects.create(
+        profile=profile,
+        valid_from=date(2010, 1, 1),
+        weight_min_kg=Decimal("70.00"),
+        weight_max_kg=Decimal("75.00"),
+    )
+    # Closed interval that still overlaps the new target after the open one is shortened.
+    ProfileTarget.objects.create(
+        profile=profile,
+        valid_from=date(2018, 1, 1),
+        valid_to=date(2020, 12, 31),
+        weight_min_kg=Decimal("68.00"),
+        weight_max_kg=Decimal("72.00"),
+    )
+    client.force_login(user)
+    response = client.post(
+        "/settings/",
+        {
+            "save_target": "1",
+            "target-valid_from": "2015-01-01",
+            "target-valid_to": "",
+            "target-weight_min_kg": "71.00",
+            "target-weight_max_kg": "74.00",
+            "target-body_fat_min_percent": "",
+            "target-body_fat_max_percent": "",
+            "target-muscle_min_percent": "",
+            "target-muscle_max_percent": "",
+        },
+    )
+    assert response.status_code == 200
+    open_target.refresh_from_db()
+    assert open_target.valid_to is None
+    assert profile.targets.count() == 2
+
+
 def test_csv_export_includes_derived_metrics(client, user, profile):
     client.force_login(user)
     Measurement.objects.create(

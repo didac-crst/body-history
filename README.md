@@ -89,6 +89,10 @@ Decision and product specs (also in-repo):
 
 ## Tests
 
+Use **pytest** only (this is the project test runner). Do not use
+`python manage.py test` — Django’s discovery finds zero tests here because the
+suite is pytest-style under `records/tests/`.
+
 ```sh
 docker compose run --rm --entrypoint "" -e BODY_HISTORY_USE_SQLITE=1 body-history pytest
 ```
