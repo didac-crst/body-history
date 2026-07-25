@@ -16,12 +16,14 @@ from django.db import transaction
 from django.db.models import Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.templatetags.static import static
+from django.urls import reverse
 from django.utils import timezone
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .charts import (
     alignment_sparkline,
@@ -68,6 +70,45 @@ from .trusted_devices import (
 
 # Re-export for management commands that historically imported from views.
 __all__ = ["get_or_create_default_profile"]
+
+
+@require_GET
+@never_cache
+def site_manifest(request):
+    """Web app manifest with hashed static icon URLs for Add to Home Screen."""
+    return JsonResponse(
+        {
+            "name": "Body History",
+            "short_name": "Body History",
+            "description": "Private weight and body-composition history",
+            "start_url": reverse("manual_import"),
+            "scope": "/",
+            "display": "standalone",
+            "background_color": "#e7edf2",
+            "theme_color": "#e7edf2",
+            "icons": [
+                {
+                    "src": static("icons/icon-192.png"),
+                    "sizes": "192x192",
+                    "type": "image/png",
+                    "purpose": "any",
+                },
+                {
+                    "src": static("icons/icon-512.png"),
+                    "sizes": "512x512",
+                    "type": "image/png",
+                    "purpose": "any",
+                },
+                {
+                    "src": static("icons/apple-touch-icon.png"),
+                    "sizes": "180x180",
+                    "type": "image/png",
+                    "purpose": "any",
+                },
+            ],
+        },
+        content_type="application/manifest+json",
+    )
 
 
 def _clear_legacy_auth_cookies(response) -> None:

@@ -20,13 +20,14 @@ from .views import (
     quick_add,
     revoke_trusted_device,
     settings_view,
+    site_manifest,
 )
 
 urlpatterns = [
     path("login/", BodyHistoryLoginView.as_view(), name="login"),
     path("logout/", logout_view, name="logout"),
-    path("", login_required(dashboard), name="dashboard"),
-    path("compass/", compass_page, name="compass"),
+    path("site.webmanifest", site_manifest, name="site_manifest"),
+    path("", login_required(dashboard), name="dashboard"),    path("compass/", compass_page, name="compass"),
     path("api/compass-history/", compass_history_data, name="compass_history_data"),
     path("api/compass-simulate/", compass_simulate, name="compass_simulate"),
     path("manual_import/", quick_add, name="manual_import"),
