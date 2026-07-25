@@ -38,6 +38,24 @@ class ProfileTarget(TimeStampedModel):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="targets")
     valid_from = models.DateField()
     valid_to = models.DateField(null=True, blank=True)
+
+    # Preferred range fields for Body Compass.
+    weight_min_kg = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    weight_max_kg = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    body_fat_min_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    body_fat_max_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    muscle_min_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    muscle_max_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+
+    # Legacy single-value fields kept for migration compatibility.
     target_weight_kg = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     target_bmi = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     target_body_fat_percent = models.DecimalField(
@@ -54,8 +72,52 @@ class ProfileTarget(TimeStampedModel):
             models.CheckConstraint(
                 condition=Q(valid_to__isnull=True) | Q(valid_to__gte=models.F("valid_from")),
                 name="profile_targets_valid_range",
-            )
+            ),
+            models.CheckConstraint(
+                condition=Q(weight_min_kg__isnull=True)
+                | Q(weight_max_kg__isnull=True)
+                | Q(weight_min_kg__lte=models.F("weight_max_kg")),
+                name="profile_targets_weight_min_lte_max",
+            ),
+            models.CheckConstraint(
+                condition=Q(body_fat_min_percent__isnull=True)
+                | Q(body_fat_max_percent__isnull=True)
+                | Q(body_fat_min_percent__lte=models.F("body_fat_max_percent")),
+                name="profile_targets_fat_min_lte_max",
+            ),
+            models.CheckConstraint(
+                condition=Q(muscle_min_percent__isnull=True)
+                | Q(muscle_max_percent__isnull=True)
+                | Q(muscle_min_percent__lte=models.F("muscle_max_percent")),
+                name="profile_targets_muscle_min_lte_max",
+            ),
         ]
+
+    def clean(self):
+        super().clean()
+        pairs = [
+            ("weight_min_kg", "weight_max_kg", "Weight"),
+            ("body_fat_min_percent", "body_fat_max_percent", "Body fat"),
+            ("muscle_min_percent", "muscle_max_percent", "Muscle"),
+        ]
+        configured = False
+        for lo_name, hi_name, label in pairs:
+            lo = getattr(self, lo_name)
+            hi = getattr(self, hi_name)
+            if lo is not None or hi is not None:
+                configured = True
+            if lo is not None and hi is not None and lo > hi:
+                raise ValidationError({hi_name: f"{label} min must be <= max."})
+        legacy = any(
+            [
+                self.target_weight_kg,
+                self.target_body_fat_percent,
+                self.target_muscle_percent,
+                self.target_bmi,
+            ]
+        )
+        if not configured and not legacy:
+            raise ValidationError("Configure at least one target dimension.")
 
     def __str__(self) -> str:
         return f"{self.profile} from {self.valid_from}"

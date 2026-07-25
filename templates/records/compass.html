@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Compass · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="page-head row">
+  <div>
+    <h1>Body Compass</h1>
+    <p>Target alignment, direction, and primary opportunity. Composition estimates are best used as trends.</p>
+  </div>
+</section>
+
+<section class="section">
+  <h2>Target Alignment</h2>
+  {% if compass.alignment != None %}
+  <p class="compass-score"><strong>{{ compass.alignment }}</strong> / 100</p>
+  <p class="meta">{{ compass.direction }}
+    {% if compass.direction_delta != None %}· {{ compass.direction_delta }} over {{ compass.comparison_days }} days{% endif %}
+    · {{ compass.confidence }} confidence · data {{ compass.freshness }}
+  </p>
+  {% else %}
+  <p class="meta">No alignment yet. Add measurements and configure ranges in Settings.</p>
+  {% endif %}
+</section>
+
+<section class="section">
+  <h2>Position versus destination</h2>
+  <table class="table deltas">
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th class="num">Latest</th>
+        <th class="num">Target min</th>
+        <th class="num">Target max</th>
+        <th class="num">Score</th>
+        <th>Direction</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in compass.components %}
+      <tr>
+        <td>{{ c.label }}</td>
+        <td class="num">{% if c.value != None %}{{ c.value }}{% else %}—{% endif %}</td>
+        <td class="num">{% if c.target_min != None %}{{ c.target_min }}{% else %}—{% endif %}</td>
+        <td class="num">{% if c.target_max != None %}{{ c.target_max }}{% else %}—{% endif %}</td>
+        <td class="num">{% if c.score != None %}{{ c.score }}{% else %}—{% endif %}</td>
+        <td>{{ c.direction }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6">No components.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if compass.primary_opportunity %}
+<section class="section">
+  <h2>Primary opportunity</h2>
+  <p><strong>{{ compass.primary_opportunity.title }}</strong></p>
+  <p>{{ compass.primary_opportunity.explanation }}</p>
+  {% if compass.primary_opportunity.alignment_gain %}
+  <p class="meta">Potential alignment impact: {{ compass.primary_opportunity.alignment_gain }}</p>
+  {% endif %}
+  {% if compass.secondary_opportunity %}
+  <h3>Secondary</h3>
+  <p><strong>{{ compass.secondary_opportunity.title }}</strong></p>
+  <p class="meta">{{ compass.secondary_opportunity.explanation }}</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if compass.latest %}
+<section class="section">
+  <h2>Latest vs trend</h2>
+  <table class="table deltas">
+    <thead>
+      <tr><th>Metric</th><th class="num">Latest</th><th class="num">{{ compass.trend.window_days }}-day trend</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Weight</td>
+        <td class="num">{{ compass.latest.weight_kg }} kg</td>
+        <td class="num">{% if compass.trend.weight_kg != None %}{{ compass.trend.weight_kg }} kg{% else %}—{% endif %}</td>
+      </tr>
+      <tr>
+        <td>Body fat</td>
+        <td class="num">{% if compass.latest.body_fat_percent != None %}{{ compass.latest.body_fat_percent }}%{% else %}—{% endif %}</td>
+        <td class="num">{% if compass.trend.body_fat_percent != None %}{{ compass.trend.body_fat_percent }}%{% else %}—{% endif %}</td>
+      </tr>
+      <tr>
+        <td>Muscle</td>
+        <td class="num">{% if compass.latest.muscle_percent != None %}{{ compass.latest.muscle_percent }}%{% else %}—{% endif %}</td>
+        <td class="num">{% if compass.trend.muscle_percent != None %}{{ compass.trend.muscle_percent }}%{% else %}—{% endif %}</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% for note in compass.notes %}
+<p class="meta">{{ note }}</p>
+{% endfor %}
+{% endblock %}

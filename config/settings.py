@@ -122,6 +122,11 @@ STORAGES = {
     },
 }
 
+if env_bool("BODY_HISTORY_USE_SQLITE", default=False):
+    STORAGES["staticfiles"] = {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    }
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "login"

@@ -206,6 +206,25 @@ body {
   color: var(--accent);
 }
 
+.post-compass {
+  margin: 0.75rem 0 1rem;
+}
+
+.post-compass h2 {
+  margin: 1rem 0 0.35rem;
+  font-family: var(--display);
+  font-size: 1.15rem;
+}
+
+.compass-score {
+  margin: 0.2rem 0;
+  font-size: 1.35rem;
+}
+
+.compass-score strong {
+  font-size: 1.8rem;
+}
+
 @media (max-width: 420px) {
   .actions {
     grid-template-columns: 1fr;

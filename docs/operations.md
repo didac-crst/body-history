@@ -98,9 +98,11 @@ flowchart LR
   f --> m["Muscle %"]
   m --> d["Date"]
   d --> s["Review and save"]
+  s --> c["Post-save Compass"]
 ```
 
-Intended for “Add to Home Screen”. No links to other app features on that page.  
+Intended for “Add to Home Screen”. No links to other app features during entry.  
+After save, shows Target Alignment, primary opportunity, and latest-vs-trend.  
 Still requires Django login; trusted-device cookie avoids repeated passwords on known phones.
 
 ## Tests
@@ -109,8 +111,19 @@ Still requires Django login; trusted-device cookie avoids repeated passwords on 
 docker compose run --rm --entrypoint "" -e BODY_HISTORY_USE_SQLITE=1 body-history pytest
 ```
 
-## Database
+## Body Compass targets
 
-Logical database: `body_history`  
-App schema: `body` (via PostgreSQL `search_path`)  
-Backups: whole-cluster PostgreSQL NAS job (not this app).
+Personal target ranges live in the database only.
+
+Create/update via **Settings → Body Compass**, or one-off:
+
+```sh
+docker compose exec body-history python manage.py seed_compass_targets \
+  --valid-from YYYY-MM-DD \
+  --weight-min ... --weight-max ... \
+  --fat-min ... --fat-max ... \
+  --muscle-min ... --muscle-max ... \
+  --close-previous
+```
+
+Pass the numeric ranges as arguments. Do not commit personal target numbers into source.

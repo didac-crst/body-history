@@ -28,16 +28,55 @@
     {% if saved %}
     <section class="panel success-panel is-active">
       <h1>Saved</h1>
-      <dl class="review">
-        <div><dt>Weight</dt><dd>{{ saved_summary.weight_kg }} kg</dd></div>
-        <div><dt>Fat</dt><dd>{% if saved_summary.body_fat_percent %}{{ saved_summary.body_fat_percent }}%{% else %}—{% endif %}</dd></div>
-        <div><dt>Muscle</dt><dd>{% if saved_summary.muscle_percent %}{{ saved_summary.muscle_percent }}%{% else %}—{% endif %}</dd></div>
-        <div><dt>Date</dt><dd>{{ saved_summary.measured_on }}</dd></div>
-      </dl>
+      <p class="hint">
+        {{ saved_summary.weight_kg }} kg
+        {% if saved_summary.body_fat_percent %} · {{ saved_summary.body_fat_percent }}% fat{% endif %}
+        {% if saved_summary.muscle_percent %} · {{ saved_summary.muscle_percent }}% muscle{% endif %}
+      </p>
       {% for warning in warnings %}
       <p class="warn">{{ warning }}</p>
       {% endfor %}
-      <a class="btn primary" href="{% url 'manual_import' %}">Add another</a>
+
+      {% if compass %}
+      <div class="post-compass">
+        <h2>Target Alignment</h2>
+        {% if compass.alignment != None %}
+        <p class="compass-score"><strong>{{ compass.alignment }}</strong> / 100
+          {% if compass.direction_delta != None %}
+          <span class="hint">{{ compass.direction_delta }} since previous trend</span>
+          {% endif %}
+        </p>
+        <p class="hint">{{ compass.confidence }} confidence · {{ compass.direction }}</p>
+        {% else %}
+        <p class="hint">Configure target ranges in Settings to unlock alignment.</p>
+        {% endif %}
+
+        {% if compass.primary_opportunity %}
+        <h2>Primary opportunity</h2>
+        <p><strong>{{ compass.primary_opportunity.title }}</strong></p>
+        <p class="hint">{{ compass.primary_opportunity.explanation }}</p>
+        {% endif %}
+
+        {% if compass.latest %}
+        <h2>Latest vs trend</h2>
+        <dl class="review">
+          <div><dt>Latest weight</dt><dd>{{ compass.latest.weight_kg }} kg</dd></div>
+          <div><dt>{{ compass.trend.window_days }}-day trend</dt><dd>{% if compass.trend.weight_kg != None %}{{ compass.trend.weight_kg }} kg{% else %}—{% endif %}</dd></div>
+        </dl>
+        {% endif %}
+        {% for note in compass.notes %}
+        <p class="hint">{{ note }}</p>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="actions">
+        <a class="btn primary" href="{% url 'manual_import' %}">Add another</a>
+        <a class="btn secondary" href="{% url 'dashboard' %}">View dashboard</a>
+        {% if measurement_id %}
+        <a class="btn ghost" href="{% url 'measurement_edit' measurement_id %}">Edit measurement</a>
+        {% endif %}
+      </div>
     </section>
     {% else %}
 

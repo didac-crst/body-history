@@ -21,25 +21,28 @@ flowchart TB
 ```mermaid
 flowchart LR
   login["/login/"] --> dash["/"]
+  dash --> compass["/compass/"]
   dash --> manual["/manual_import/"]
   dash --> history["/history/"]
   dash --> chart["/chart/"]
   dash --> excel["/import/"]
   dash --> settings["/settings/"]
   history --> csv["/history/export.csv"]
+  manual --> postSave["Post-save Compass overview"]
 ```
 
 ## Important routes
 
 | Path | Purpose |
 |------|---------|
-| `/` | Dashboard |
-| `/manual_import/` | Phone step-by-step measurement entry |
+| `/` | Dashboard (latest metrics + Target Alignment card) |
+| `/compass/` | Body Compass detail (alignment, opportunity, latest vs trend) |
+| `/manual_import/` | Phone step-by-step measurement entry + post-save Compass |
 | `/history/` | Table + filters |
 | `/history/export.csv` | CSV export with derived BMI / fat mass |
 | `/chart/` | Trend chart (raw points + smooth) |
 | `/import/` | Excel dry-run / import UI |
-| `/settings/` | Profile, targets, trusted devices |
+| `/settings/` | Profile, versioned target ranges, trusted devices |
 | `/login/` | Sign-in |
 
 ## Manual import flow
@@ -50,7 +53,22 @@ flowchart LR
   f --> m["3. Muscle %"]
   m --> d["4. Date"]
   d --> r["5. Review and save"]
+  r --> c["Post-save Compass"]
 ```
+
+## Body Compass modules
+
+```mermaid
+flowchart TB
+  views["views / templates"] --> compass["records/compass.py"]
+  compass --> scoring["scoring.py"]
+  compass --> trends["trends.py"]
+  compass --> recs["recommendations.py"]
+  compass --> metrics["metrics.py"]
+  compass --> db["ProfileTarget ranges in DB"]
+```
+
+Personal target numbers live only in `ProfileTarget` rows. Code may contain algorithm defaults (weights, windows, tolerances), never personal destinations.
 
 ## Domain model (summary)
 
@@ -81,6 +99,12 @@ erDiagram
     uuid id
     date valid_from
     date valid_to
+    numeric weight_min_kg
+    numeric weight_max_kg
+    numeric body_fat_min_percent
+    numeric body_fat_max_percent
+    numeric muscle_min_percent
+    numeric muscle_max_percent
   }
   IMPORT_BATCH {
     uuid id
@@ -94,7 +118,7 @@ erDiagram
   }
 ```
 
-Derived metrics (BMI, fat mass kg, deltas) are computed in code, not stored as facts on each row.
+Derived metrics (BMI, fat mass kg, deltas, Target Alignment) are computed in code, not stored as facts on each measurement row.
 
 ## Excel mapping
 

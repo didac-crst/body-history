@@ -107,15 +107,36 @@ class ProfileTargetForm(forms.ModelForm):
         fields = [
             "valid_from",
             "valid_to",
-            "target_weight_kg",
-            "target_bmi",
-            "target_body_fat_percent",
-            "target_muscle_percent",
+            "weight_min_kg",
+            "weight_max_kg",
+            "body_fat_min_percent",
+            "body_fat_max_percent",
+            "muscle_min_percent",
+            "muscle_max_percent",
         ]
         widgets = {
             "valid_from": forms.DateInput(attrs={"type": "date"}),
             "valid_to": forms.DateInput(attrs={"type": "date"}),
         }
+
+    def clean(self):
+        cleaned = super().clean()
+        pairs = [
+            ("weight_min_kg", "weight_max_kg", "Weight"),
+            ("body_fat_min_percent", "body_fat_max_percent", "Body fat"),
+            ("muscle_min_percent", "muscle_max_percent", "Muscle"),
+        ]
+        configured = False
+        for lo_name, hi_name, label in pairs:
+            lo = cleaned.get(lo_name)
+            hi = cleaned.get(hi_name)
+            if lo is not None or hi is not None:
+                configured = True
+            if lo is not None and hi is not None and lo > hi:
+                self.add_error(hi_name, f"{label} min must be <= max.")
+        if not configured:
+            self.add_error(None, "Configure at least one target dimension.")
+        return cleaned
 
 
 class ImportPathForm(forms.Form):

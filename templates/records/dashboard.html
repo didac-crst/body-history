@@ -8,12 +8,56 @@
   </div>
   <div class="actions">
     <a class="button" href="{% url 'manual_import' %}">Manual import</a>
+    <a class="button secondary" href="{% url 'compass' %}">Compass</a>
   </div>
 </section>
 
 {% if not metrics.latest %}
 <p class="empty">No measurements yet. <a href="{% url 'import' %}">Import Pes.xlsx</a> or <a href="{% url 'manual_import' %}">add one</a>.</p>
 {% else %}
+
+<section class="section compass-card">
+  <h2>Target Alignment</h2>
+  {% if compass.alignment != None %}
+  <p class="compass-score"><strong>{{ compass.alignment }}</strong> / 100</p>
+  <p class="meta">{{ compass.direction }}
+    {% if compass.direction_delta != None %}
+      · {{ compass.direction_delta }} over {{ compass.comparison_days }} days
+    {% endif %}
+    · {{ compass.confidence }} confidence
+  </p>
+  <table class="table deltas">
+    <thead>
+      <tr>
+        <th>Component</th>
+        <th class="num">Score</th>
+        <th>Direction</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in compass.components %}
+      <tr>
+        <td>{{ c.label }}</td>
+        <td class="num">{% if c.score != None %}{{ c.score }} / 100{% else %}—{% endif %}</td>
+        <td>{{ c.direction }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="meta">Configure target ranges in Settings to unlock Target Alignment.</p>
+  {% endif %}
+
+  {% if compass.primary_opportunity %}
+  <h3>Primary opportunity</h3>
+  <p><strong>{{ compass.primary_opportunity.title }}</strong></p>
+  <p class="meta">{{ compass.primary_opportunity.explanation }}</p>
+  {% endif %}
+  {% for note in compass.notes %}
+  <p class="meta">{{ note }}</p>
+  {% endfor %}
+</section>
+
 <div class="stats">
   <div>
     <span class="label">Weight</span>
@@ -66,9 +110,7 @@
   </table>
 </section>
 
-<p class="meta">Latest measured {{ metrics.latest.measured_at }} · height {{ profile.height_cm }} cm
-{% if metrics.target %} · target BMI {{ metrics.target.target_bmi }}{% endif %}
-</p>
+<p class="meta">Latest measured {{ metrics.latest.measured_at }} · height {{ profile.height_cm }} cm</p>
 <p class="actions">
   <a class="button" href="{% url 'manual_import' %}">Manual import</a>
   <a class="button secondary" href="{% url 'chart' %}">Open trend chart</a>

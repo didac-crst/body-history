@@ -17,6 +17,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
+from .compass import evaluate_compass
 from .forms import ImportPathForm, LoginForm, MeasurementForm, ProfileForm, ProfileTargetForm
 from .importer import import_workbook, parse_workbook, report_to_dict
 from .metrics import (
@@ -149,7 +150,7 @@ def quick_add(request):
             if same_local_date_exists(profile, measured_at):
                 warnings.append("Another measurement already exists on this date.")
 
-            Measurement.objects.create(
+            measurement = Measurement.objects.create(
                 profile=profile,
                 measured_at=measured_at,
                 weight_kg=weight_kg.quantize(Decimal("0.01")),
@@ -166,6 +167,8 @@ def quick_add(request):
                 "muscle_percent": str(muscle) if muscle is not None else "",
                 "measured_on": measured_day.isoformat(),
             }
+            context["compass"] = evaluate_compass(profile, measurement=measurement).to_dict()
+            context["measurement_id"] = str(measurement.id)
         except (InvalidOperation, ValueError, TypeError) as exc:
             context["error"] = str(exc)
 
@@ -176,10 +179,22 @@ def quick_add(request):
 def dashboard(request):
     profile = get_or_create_default_profile()
     metrics = dashboard_metrics(profile)
+    compass = evaluate_compass(profile).to_dict()
     return render(
         request,
         "records/dashboard.html",
-        {"profile": profile, "metrics": metrics},
+        {"profile": profile, "metrics": metrics, "compass": compass},
+    )
+
+
+@login_required
+def compass_page(request):
+    profile = get_or_create_default_profile()
+    compass = evaluate_compass(profile).to_dict()
+    return render(
+        request,
+        "records/compass.html",
+        {"profile": profile, "compass": compass},
     )
 
 
@@ -377,15 +392,26 @@ def chart_data(request):
     target = target_for_date(profile, latest_date)
     target_value = None
     if target:
-        mapping = {
-            "weight_kg": target.target_weight_kg,
-            "bmi": target.target_bmi,
-            "body_fat_percent": target.target_body_fat_percent,
-            "muscle_percent": target.target_muscle_percent,
-            "fat_mass_kg": None,
-        }
-        target_value = mapping.get(metric)
-        target_value = float(target_value) if target_value is not None else None
+        if metric == "weight_kg":
+            lo, hi = target.weight_min_kg, target.weight_max_kg
+            if lo is not None and hi is not None:
+                target_value = float((lo + hi) / 2)
+            elif target.target_weight_kg is not None:
+                target_value = float(target.target_weight_kg)
+        elif metric == "bmi":
+            target_value = float(target.target_bmi) if target.target_bmi is not None else None
+        elif metric == "body_fat_percent":
+            lo, hi = target.body_fat_min_percent, target.body_fat_max_percent
+            if lo is not None and hi is not None:
+                target_value = float((lo + hi) / 2)
+            elif target.target_body_fat_percent is not None:
+                target_value = float(target.target_body_fat_percent)
+        elif metric == "muscle_percent":
+            lo, hi = target.muscle_min_percent, target.muscle_max_percent
+            if lo is not None and hi is not None:
+                target_value = float((lo + hi) / 2)
+            elif target.target_muscle_percent is not None:
+                target_value = float(target.target_muscle_percent)
 
     return JsonResponse(
         {
@@ -419,6 +445,11 @@ def settings_view(request):
         if target_form.is_valid():
             target = target_form.save(commit=False)
             target.profile = profile
+            # Close open previous versions the day before the new one starts.
+            for previous in profile.targets.filter(valid_to__isnull=True):
+                if previous.valid_from < target.valid_from:
+                    previous.valid_to = target.valid_from - timedelta(days=1)
+                    previous.save(update_fields=["valid_to", "updated_at"])
             target.save()
             messages.success(request, "Target version saved.")
             return redirect("settings")
@@ -481,14 +512,6 @@ def import_page(request):
         elif action == "import":
             parsed = parse_workbook(path)
             batch = import_workbook(profile, path, report=parsed)
-            if not profile.targets.exists():
-                ProfileTarget.objects.create(
-                    profile=profile,
-                    valid_from=date(2005, 1, 1),
-                    target_bmi="22.00",
-                    target_body_fat_percent="17.00",
-                    target_muscle_percent="39.80",
-                )
             messages.success(
                 request,
                 f"Import finished: {batch.accepted_count} accepted, {batch.rejected_count} rejected.",

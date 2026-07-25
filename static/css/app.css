@@ -114,6 +114,22 @@ body {
 
 .stats strong { font-size: 1.35rem; }
 
+.compass-score {
+  font-size: 1.6rem;
+  margin: 0.35rem 0 0.5rem;
+}
+
+.compass-score strong {
+  font-family: var(--display);
+  font-size: 2.2rem;
+}
+
+.compass-card h3 {
+  margin-top: 1.1rem;
+  font-family: var(--display);
+  font-size: 1.1rem;
+}
+
 .section { margin: 1.25rem 0; }
 .section h2 { margin-top: 0; font-family: var(--display); font-size: 1.25rem; }
 
