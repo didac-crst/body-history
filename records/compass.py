@@ -9,12 +9,12 @@ from typing import Any
 
 from django.utils import timezone
 
+from .guidance import action_guidance, fitness_signals
 from .metrics import local_date, measurement_queryset, target_for_date
 from .models import Measurement, Profile, ProfileTarget
+from .preferences import resolve_algorithm
 from .recommendations import Opportunity, rank_opportunities
 from .scoring import (
-    COMPARISON_WINDOW_DAYS,
-    TREND_WINDOW_DAYS,
     component_scores,
     components_to_dict,
     direction_label,
@@ -38,6 +38,8 @@ class CompassSnapshot:
     latest: dict[str, Any] | None
     trend: dict[str, Any]
     notes: list[str]
+    guidance: list[dict[str, str]]
+    signals: list[dict[str, Any]]
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -59,7 +61,7 @@ def _target_payload(target: ProfileTarget | None) -> dict[str, Any] | None:
     }
 
 
-def _effective_ranges(target: ProfileTarget | None) -> dict[str, Any]:
+def effective_target_ranges(target: ProfileTarget | None) -> dict[str, Any]:
     """Prefer range fields; fall back to legacy single values as narrow bands."""
     if target is None:
         return {}
@@ -153,32 +155,47 @@ def evaluate_compass(
     at = at or timezone.now()
     on_date = local_date(at, profile.timezone)
     target = target_for_date(profile, on_date)
-    ranges = _effective_ranges(target)
+    ranges = effective_target_ranges(target)
+    algo = resolve_algorithm(profile)
+    trend_days = algo.trend_window_days
+    comparison_days = algo.comparison_window_days
 
     qs = measurement_queryset(profile).filter(measured_at__lte=at).order_by("-measured_at")
     latest = measurement or qs.first()
     notes: list[str] = []
 
     if latest is None:
+        primary = _opp_dict(
+            rank_opportunities(
+                target=ranges,
+                composition_available=False,
+                algorithm=algo,
+            )[0]
+        )
+        guidance = action_guidance(
+            alignment=None,
+            direction="Insufficient data",
+            freshness="stale",
+            confidence="Insufficient data",
+            components=[],
+            primary_opportunity=primary,
+        )
         return CompassSnapshot(
             alignment=None,
             confidence="Insufficient data",
             freshness="stale",
             direction="Insufficient data",
             direction_delta=None,
-            comparison_days=COMPARISON_WINDOW_DAYS,
+            comparison_days=comparison_days,
             components=[],
-            primary_opportunity=_opp_dict(
-                rank_opportunities(
-                    target=ranges,
-                    composition_available=False,
-                )[0]
-            ),
+            primary_opportunity=primary,
             secondary_opportunity=None,
             target=_target_payload(target),
             latest=None,
             trend={},
             notes=["No measurements available."],
+            guidance=guidance,
+            signals=[],
         )
 
     if target is None or not any(ranges.values()):
@@ -188,33 +205,33 @@ def evaluate_compass(
         weight_kg=latest.weight_kg,
         body_fat_percent=latest.body_fat_percent,
         muscle_percent=latest.muscle_percent,
+        algorithm=algo,
         **ranges,
     )
-    alignment, _ = overall_alignment(comps)
+    alignment, _ = overall_alignment(comps, algorithm=algo)
 
-    # Previous comparable period: alignment using trend averages ending comparison_days ago.
-    prior_end = latest.measured_at - timedelta(days=COMPARISON_WINDOW_DAYS)
+    prior_end = latest.measured_at - timedelta(days=comparison_days)
     prior_weight = trend_average(
-        profile, "weight_kg", end=prior_end, days=TREND_WINDOW_DAYS
+        profile, "weight_kg", end=prior_end, days=trend_days
     )
     prior_fat = trend_average(
-        profile, "body_fat_percent", end=prior_end, days=TREND_WINDOW_DAYS
+        profile, "body_fat_percent", end=prior_end, days=trend_days
     )
     prior_muscle = trend_average(
-        profile, "muscle_percent", end=prior_end, days=TREND_WINDOW_DAYS
+        profile, "muscle_percent", end=prior_end, days=trend_days
     )
     prior_comps = component_scores(
         weight_kg=prior_weight,
         body_fat_percent=prior_fat,
         muscle_percent=prior_muscle,
+        algorithm=algo,
         **ranges,
     )
-    prior_alignment, _ = overall_alignment(prior_comps)
+    prior_alignment, _ = overall_alignment(prior_comps, algorithm=algo)
     direction_delta = None
     if alignment is not None and prior_alignment is not None:
         direction_delta = (alignment - prior_alignment).quantize(Decimal("0.01"))
 
-    # Attach component direction using prior component scores.
     component_rows = []
     for row in components_to_dict(comps):
         key = row["key"]
@@ -228,8 +245,8 @@ def evaluate_compass(
         component_rows.append(row)
 
     days_since = (timezone.localdate() - local_date(latest.measured_at, profile.timezone)).days
-    recent_count = count_recent(profile, days=TREND_WINDOW_DAYS)
-    variability = recent_variability(profile, "weight_kg", days=TREND_WINDOW_DAYS)
+    recent_count = count_recent(profile, days=trend_days)
+    variability = recent_variability(profile, "weight_kg", days=trend_days)
     has_fat = latest.body_fat_percent is not None
     has_muscle = latest.muscle_percent is not None
     composition_available = has_fat and has_muscle
@@ -243,35 +260,55 @@ def evaluate_compass(
         muscle_percent=latest.muscle_percent,
         target=ranges,
         composition_available=composition_available,
+        algorithm=algo,
+    )
+    primary = _opp_dict(opportunities[0] if opportunities else None)
+    secondary = _opp_dict(opportunities[1] if len(opportunities) > 1 else None)
+    confidence = _confidence(
+        recent_count=recent_count,
+        days_since=days_since,
+        has_fat=has_fat,
+        has_muscle=has_muscle,
+        variability=variability,
+    )
+    freshness = _freshness(days_since)
+    direction = direction_label(direction_delta)
+    guidance = action_guidance(
+        alignment=alignment,
+        direction=direction,
+        freshness=freshness,
+        confidence=confidence,
+        components=component_rows,
+        primary_opportunity=primary,
+    )
+    signals = fitness_signals(
+        height_cm=profile.height_cm,
+        weight_kg=latest.weight_kg,
+        body_fat_percent=latest.body_fat_percent,
+        target=ranges,
     )
 
     trend = {
-        "weight_kg": float(v) if (v := trend_average(profile, "weight_kg", days=TREND_WINDOW_DAYS)) is not None else None,
+        "weight_kg": float(v) if (v := trend_average(profile, "weight_kg", days=trend_days)) is not None else None,
         "body_fat_percent": float(v)
-        if (v := trend_average(profile, "body_fat_percent", days=TREND_WINDOW_DAYS)) is not None
+        if (v := trend_average(profile, "body_fat_percent", days=trend_days)) is not None
         else None,
         "muscle_percent": float(v)
-        if (v := trend_average(profile, "muscle_percent", days=TREND_WINDOW_DAYS)) is not None
+        if (v := trend_average(profile, "muscle_percent", days=trend_days)) is not None
         else None,
-        "window_days": TREND_WINDOW_DAYS,
+        "window_days": trend_days,
     }
 
     return CompassSnapshot(
         alignment=alignment,
-        confidence=_confidence(
-            recent_count=recent_count,
-            days_since=days_since,
-            has_fat=has_fat,
-            has_muscle=has_muscle,
-            variability=variability,
-        ),
-        freshness=_freshness(days_since),
-        direction=direction_label(direction_delta),
+        confidence=confidence,
+        freshness=freshness,
+        direction=direction,
         direction_delta=direction_delta,
-        comparison_days=COMPARISON_WINDOW_DAYS,
+        comparison_days=comparison_days,
         components=component_rows,
-        primary_opportunity=_opp_dict(opportunities[0] if opportunities else None),
-        secondary_opportunity=_opp_dict(opportunities[1] if len(opportunities) > 1 else None),
+        primary_opportunity=primary,
+        secondary_opportunity=secondary,
         target=_target_payload(target),
         latest={
             "id": str(latest.id),
@@ -287,4 +324,6 @@ def evaluate_compass(
         },
         trend=trend,
         notes=notes,
+        guidance=guidance,
+        signals=signals,
     )

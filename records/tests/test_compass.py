@@ -174,6 +174,26 @@ def test_score_cap_at_100():
     assert score_against_range(72.5, 72, 73, 1, 3, 1, 3) <= 100
 
 
+def test_wider_fat_muscle_defaults_avoid_zero_floor(target):
+    """Fat/muscle soft-hard bands keep typical off-target readings scorable."""
+    comps = component_scores(
+        weight_kg=Decimal("75.20"),
+        body_fat_percent=Decimal("20.30"),
+        muscle_percent=Decimal("35.40"),
+        weight_min=target.weight_min_kg,
+        weight_max=target.weight_max_kg,
+        fat_min=target.body_fat_min_percent,
+        fat_max=target.body_fat_max_percent,
+        muscle_min=target.muscle_min_percent,
+        muscle_max=target.muscle_max_percent,
+    )
+    assert comps["body_fat"].score == Decimal("38.50")
+    assert comps["muscle"].score == Decimal("39.20")
+    assert comps["weight"].score == Decimal("28.00")
+    score, _ = overall_alignment(comps)
+    assert score == Decimal("36.08")
+
+
 def test_personal_targets_loaded_from_db_not_constants(profile, target):
     Measurement.objects.create(
         profile=profile,
@@ -234,3 +254,192 @@ def test_compass_post_save_weight_only(client, django_user_model, profile, targe
     )
     assert response.status_code == 200
     assert b"Improve measurement consistency" in response.content or b"consistency" in response.content.lower()
+
+
+def test_alignment_history_modes(profile, target):
+    from records.compass_history import alignment_history
+
+    now = timezone.now()
+    Measurement.objects.create(
+        profile=profile,
+        measured_at=now - timedelta(days=10),
+        weight_kg=Decimal("75.00"),
+        body_fat_percent=Decimal("20.00"),
+        muscle_percent=Decimal("35.00"),
+    )
+    ProfileTarget.objects.create(
+        profile=profile,
+        valid_from=date(2005, 1, 1),
+        valid_to=date(2019, 12, 31),
+        body_fat_min_percent=Decimal("18.00"),
+        body_fat_max_percent=Decimal("19.00"),
+        muscle_min_percent=Decimal("36.00"),
+        muscle_max_percent=Decimal("37.00"),
+    )
+    hist = alignment_history(profile, days=30, mode="historical")
+    today = alignment_history(profile, days=30, mode="today")
+    assert hist["count"] >= 1
+    assert today["count"] >= 1
+    assert hist["points"][0]["alignment"] is not None
+
+
+def test_simulate_measurement_returns_opportunities(profile, target):
+    from records.compass_history import simulate_measurement
+
+    result = simulate_measurement(
+        profile,
+        weight_kg=Decimal("75.20"),
+        body_fat_percent=Decimal("20.30"),
+        muscle_percent=Decimal("35.40"),
+    )
+    assert result["alignment"] is not None
+    assert result["opportunities"]
+    assert result["milestones"]
+
+
+def test_compass_history_api(client, django_user_model, profile, target):
+    user = django_user_model.objects.create_user(username="hist", password="pass")
+    client.force_login(user)
+    Measurement.objects.create(
+        profile=profile,
+        measured_at=timezone.now(),
+        weight_kg=Decimal("75.00"),
+        body_fat_percent=Decimal("20.00"),
+        muscle_percent=Decimal("35.00"),
+    )
+    response = client.get("/api/compass-history/?range=90d&mode=today")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "today"
+    assert payload["count"] >= 1
+
+
+def test_compass_simulate_api(client, django_user_model, profile, target):
+    user = django_user_model.objects.create_user(username="sim", password="pass")
+    client.force_login(user)
+    response = client.get(
+        "/api/compass-simulate/?weight_kg=75.2&body_fat_percent=20.3&muscle_percent=35.4"
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["alignment"] is not None
+    assert "opportunities" in payload
+
+
+def test_compass_page_includes_chart_and_simulator(client, django_user_model, profile, target):
+    user = django_user_model.objects.create_user(username="page", password="pass")
+    client.force_login(user)
+    response = client.get("/compass/")
+    assert response.status_code == 200
+    assert b"Alignment history" in response.content
+    assert b"Opportunity simulator" in response.content
+    assert b"compass.js" in response.content
+    assert b"Guidance" in response.content or b"Fitness signals" in response.content
+
+
+def test_switch_profile_isolates_data(client, django_user_model, profile, target):
+    user = django_user_model.objects.create_user(username="multi", password="pass")
+    client.force_login(user)
+    other = Profile.objects.create(
+        display_name="Partner",
+        height_cm=Decimal("165.00"),
+        timezone="Europe/Paris",
+    )
+    Measurement.objects.create(
+        profile=profile,
+        measured_at=timezone.now(),
+        weight_kg=Decimal("75.00"),
+        body_fat_percent=Decimal("20.00"),
+        muscle_percent=Decimal("35.00"),
+    )
+    response = client.post(
+        "/settings/switch-profile/",
+        {"profile_id": str(other.id), "next": "/compass/"},
+    )
+    assert response.status_code == 302
+    compass = client.get("/compass/")
+    assert compass.status_code == 200
+    # Partner has no measurements / may lack targets — should not show the other profile's 75kg as latest.
+    assert b"75.0" not in compass.content
+
+
+def test_post_save_includes_alignment_delta(client, django_user_model, profile, target):
+    user = django_user_model.objects.create_user(username="delta", password="pass")
+    client.force_login(user)
+    Measurement.objects.create(
+        profile=profile,
+        measured_at=timezone.now() - timedelta(days=3),
+        weight_kg=Decimal("76.00"),
+        body_fat_percent=Decimal("21.00"),
+        muscle_percent=Decimal("34.50"),
+    )
+    response = client.post(
+        "/manual_import/",
+        {
+            "weight_kg": "75.2",
+            "body_fat_percent": "20.3",
+            "muscle_percent": "35.4",
+            "measured_on": timezone.localdate().isoformat(),
+        },
+    )
+    assert response.status_code == 200
+    assert b"Target Alignment" in response.content
+    assert b"vs previous" in response.content
+
+
+def test_settings_shows_profiles_and_preview(client, django_user_model, profile, target):
+    user = django_user_model.objects.create_user(username="set", password="pass")
+    client.force_login(user)
+    response = client.get("/settings/")
+    assert response.status_code == 200
+    assert b"Profiles" in response.content
+    assert b"Active target preview" in response.content or b"Add target version" in response.content
+
+
+def test_preferences_change_scoring(profile, target):
+    from records.models import CompassPreferences
+    from records.preferences import resolve_algorithm
+    from records.scoring import component_scores, overall_alignment
+
+    Measurement.objects.create(
+        profile=profile,
+        measured_at=timezone.now(),
+        weight_kg=Decimal("75.20"),
+        body_fat_percent=Decimal("20.30"),
+        muscle_percent=Decimal("35.40"),
+    )
+    default_algo = resolve_algorithm(profile)
+    comps = component_scores(
+        weight_kg=Decimal("75.20"),
+        body_fat_percent=Decimal("20.30"),
+        muscle_percent=Decimal("35.40"),
+        weight_min=target.weight_min_kg,
+        weight_max=target.weight_max_kg,
+        fat_min=target.body_fat_min_percent,
+        fat_max=target.body_fat_max_percent,
+        muscle_min=target.muscle_min_percent,
+        muscle_max=target.muscle_max_percent,
+        algorithm=default_algo,
+    )
+    default_score, _ = overall_alignment(comps, algorithm=default_algo)
+
+    CompassPreferences.objects.create(
+        profile=profile,
+        fat_soft_pp=Decimal("1.00"),
+        fat_hard_pp=Decimal("3.00"),
+    )
+    tight = resolve_algorithm(profile)
+    comps2 = component_scores(
+        weight_kg=Decimal("75.20"),
+        body_fat_percent=Decimal("20.30"),
+        muscle_percent=Decimal("35.40"),
+        weight_min=target.weight_min_kg,
+        weight_max=target.weight_max_kg,
+        fat_min=target.body_fat_min_percent,
+        fat_max=target.body_fat_max_percent,
+        muscle_min=target.muscle_min_percent,
+        muscle_max=target.muscle_max_percent,
+        algorithm=tight,
+    )
+    tight_score, _ = overall_alignment(comps2, algorithm=tight)
+    assert tight_score < default_score

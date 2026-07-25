@@ -10,6 +10,7 @@ This app stores personal health data.
 - Do not commit workbooks, measurement CSVs, or export dumps.
 - Avoid logging measurement values unnecessarily.
 - Keep secrets only in `/srv/satellite/secrets/body-history.env`.
+- Keep personal target ranges in the database only — never as code constants, committed fixtures, or migrations with real personal numbers.
 
 ## Authentication
 
@@ -33,6 +34,13 @@ flowchart TD
 - Server stores only a hash of the device token.
 - Default device lifetime: 180 days.
 - Devices can be revoked in **Settings**; logout-all revokes active devices.
+
+## Profiles and household use
+
+Multiple profiles share the same login. The active profile id is kept in the
+**session**. Anyone signed in can switch profiles and see that profile’s
+measurements and targets. This is intentional for a private household app; it is
+not per-user ACL isolation.
 
 ## Public hostname
 
@@ -60,3 +68,4 @@ Never commit:
 - real `DJANGO_SECRET_KEY` / DB passwords / bootstrap passwords
 - `imports/` contents
 - `*.xlsx`, measurement exports, personal note dumps of readings
+- personal target values as code, fixtures, or committed seed data

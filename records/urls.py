@@ -5,7 +5,9 @@ from .views import (
     BodyHistoryLoginView,
     chart_data,
     chart_page,
+    compass_history_data,
     compass_page,
+    compass_simulate,
     dashboard,
     export_csv,
     history,
@@ -18,6 +20,7 @@ from .views import (
     quick_add,
     revoke_trusted_device,
     settings_view,
+    switch_profile,
 )
 
 urlpatterns = [
@@ -25,6 +28,8 @@ urlpatterns = [
     path("logout/", logout_view, name="logout"),
     path("", login_required(dashboard), name="dashboard"),
     path("compass/", compass_page, name="compass"),
+    path("api/compass-history/", compass_history_data, name="compass_history_data"),
+    path("api/compass-simulate/", compass_simulate, name="compass_simulate"),
     path("manual_import/", quick_add, name="manual_import"),
     path("measurements/new/", measurement_create, name="measurement_create"),
     path("measurements/<uuid:pk>/edit/", measurement_edit, name="measurement_edit"),
@@ -34,6 +39,7 @@ urlpatterns = [
     path("chart/", chart_page, name="chart"),
     path("api/chart-data/", chart_data, name="chart_data"),
     path("settings/", settings_view, name="settings"),
+    path("settings/switch-profile/", switch_profile, name="switch_profile"),
     path("settings/devices/<uuid:pk>/revoke/", revoke_trusted_device, name="revoke_device"),
     path("settings/devices/revoke-all/", logout_all_devices, name="logout_all_devices"),
     path("import/", import_page, name="import"),

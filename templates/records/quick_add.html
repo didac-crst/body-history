@@ -22,6 +22,7 @@
         data-error="{{ error|default:'' }}">
     <header class="quick-top">
       <p class="brand">Body History</p>
+      {% if profile %}<p class="hint">{{ profile.display_name }}</p>{% endif %}
       <p class="step-label" id="step-label">1 / 5</p>
     </header>
 
@@ -42,13 +43,18 @@
         <h2>Target Alignment</h2>
         {% if compass.alignment != None %}
         <p class="compass-score"><strong>{{ compass.alignment }}</strong> / 100
-          {% if compass.direction_delta != None %}
+          {% if compass.alignment_delta_from_previous != None %}
+          <span class="hint">
+            {% if compass.alignment_delta_from_previous > 0 %}+{% endif %}{{ compass.alignment_delta_from_previous }}
+            vs previous {{ compass.previous_alignment }}
+          </span>
+          {% elif compass.direction_delta != None %}
           <span class="hint">{{ compass.direction_delta }} since previous trend</span>
           {% endif %}
         </p>
         <p class="hint">{{ compass.confidence }} confidence · {{ compass.direction }}</p>
         {% else %}
-        <p class="hint">Configure target ranges in Settings to unlock alignment.</p>
+        <p class="hint"><a href="{% url 'settings' %}#targets">Configure target ranges in Settings</a> to unlock alignment.</p>
         {% endif %}
 
         {% if compass.primary_opportunity %}

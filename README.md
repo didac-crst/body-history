@@ -44,18 +44,19 @@ Only `.env.example` belongs in git for environment documentation.
 
 - Django + server-rendered templates
 - PostgreSQL database `body_history`, schema `body`
-- ECharts for the primary trend chart
+- ECharts for trend chart and Compass history
 - Docker Compose on host port `3060`
 - Trusted-device login (hashed token cookie, 180 days)
 
 ## Main features
 
-- Dashboard with latest values, period deltas, and **Target Alignment**
-- **Body Compass** (`/compass/`) — alignment, direction, primary opportunity
-- History table, CSV export, trend chart
-- Excel dry-run + audited import
-- Versioned target **ranges** in Settings (DB-only personal data)
-- `/manual_import/` phone-friendly step flow with post-save Compass:
+- Dashboard with latest values, period deltas, Target Alignment, and guidance
+- **Body Compass** (`/compass/`): component scores, direction, attribution, history chart, simulator, milestones, fitness signals
+- Multi-profile household switching (session active profile)
+- History table, CSV export, metric trend chart
+- Excel dry-run + audited import (scoped to active profile)
+- Versioned target **ranges** + algorithm prefs in Settings (DB-only personal data)
+- `/manual_import/` phone-friendly step flow with post-save Compass + alignment delta:
 
 ```mermaid
 flowchart LR
@@ -70,11 +71,11 @@ flowchart LR
 
 See [docs/README.md](docs/README.md) for the doc index, including:
 
-- [docs/operations.md](docs/operations.md) — deploy, bootstrap user, import, tests, Compass targets
+- [docs/operations.md](docs/operations.md) — deploy, bootstrap, import, profiles, Compass
 - [docs/privacy.md](docs/privacy.md) — auth, exposure, data handling
-- [docs/architecture.md](docs/architecture.md) — components and data model sketch
-- [docs/features/body-compass-as-built.md](docs/features/body-compass-as-built.md) — what Compass ships today
-- [docs/features/body-compass-spec.md](docs/features/body-compass-spec.md) — product/feature specification
+- [docs/architecture.md](docs/architecture.md) — components and data model
+- [docs/features/body-compass-as-built.md](docs/features/body-compass-as-built.md) — Compass status (done checklist)
+- [docs/features/body-compass-spec.md](docs/features/body-compass-spec.md) — original product/feature specification
 
 Decision and product specs (also in-repo):
 

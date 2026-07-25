@@ -82,7 +82,7 @@ flowchart TD
 ```
 
 1. Place the workbook at `/srv/satellite/data/body-history/imports/Pes.xlsx` (outside git).
-2. Sign in → **Excel import**.
+2. Sign in → **Excel import** (runs against the **active profile**).
 3. **Dry run** first; confirm unique dates / ranges.
 4. **Import** (idempotent by file hash for the same profile).
 
@@ -102,8 +102,9 @@ flowchart LR
 ```
 
 Intended for “Add to Home Screen”. No links to other app features during entry.  
-After save, shows Target Alignment, primary opportunity, and latest-vs-trend.  
-Still requires Django login; trusted-device cookie avoids repeated passwords on known phones.
+After save, shows Target Alignment (including **Δ vs previous reading**), primary opportunity, and latest-vs-trend.  
+Still requires Django login; trusted-device cookie avoids repeated passwords on known phones.  
+Shows the active profile name in the header.
 
 ## Tests
 
@@ -111,11 +112,21 @@ Still requires Django login; trusted-device cookie avoids repeated passwords on 
 docker compose run --rm --entrypoint "" -e BODY_HISTORY_USE_SQLITE=1 body-history pytest
 ```
 
-## Body Compass targets
+## Profiles
+
+Create and switch people under **Settings → Profiles**, or use the nav profile dropdown when more than one exists.
+
+- Active profile is session-scoped.
+- Measurements, target versions, and algorithm prefs are per profile.
+- Excel import and Compass APIs use the active profile.
+
+## Body Compass
+
+### Targets
 
 Personal target ranges live in the database only.
 
-Create/update via **Settings → Body Compass**, or one-off:
+Create/update via **Settings → Body Compass targets**, or one-off:
 
 ```sh
 docker compose exec body-history python manage.py seed_compass_targets \
@@ -127,3 +138,31 @@ docker compose exec body-history python manage.py seed_compass_targets \
 ```
 
 Pass the numeric ranges as arguments. Do not commit personal target numbers into source.
+
+Settings also shows an **active target preview** (trend vs ideal / soft / hard bands).
+
+### Algorithm preferences
+
+Under **Settings → Compass algorithm**:
+
+- component importance weights
+- soft/hard outer bands
+- trend / comparison windows
+
+These are not personal destinations. Defaults live in code; saving prefs writes `CompassPreferences` for the active profile.
+
+### Charts and simulator
+
+On `/compass/`:
+
+- Alignment history chart (default mode: **today’s target**; optional historical targets)
+- Component score toggles; overall line emphasised
+- Opportunity simulator + milestones + guidance
+
+JSON APIs:
+
+- `/api/compass-history/?range=1y&mode=today|historical`
+- `/api/compass-simulate/?weight_kg=...&body_fat_percent=...&muscle_percent=...`
+
+Default soft/hard bands (unless prefs override): weight 1/3 kg; fat 2/6 pp; muscle 1.5/4 pp.  
+Default importances: weight 25% / fat 45% / muscle 30%.

@@ -12,16 +12,40 @@ WEIGHT_IMPORTANCE = Decimal("0.25")
 BODY_FAT_IMPORTANCE = Decimal("0.45")
 MUSCLE_IMPORTANCE = Decimal("0.30")
 
+# Soft/hard outer bands around ideal ranges. Fat/muscle use wider bands so
+# typical consumer-scale readings stay in a useful score range instead of
+# flooring at 0 when still far from aspirational targets.
 WEIGHT_SOFT_KG = Decimal("1.00")
 WEIGHT_HARD_KG = Decimal("3.00")
-FAT_SOFT_PP = Decimal("1.00")
-FAT_HARD_PP = Decimal("3.00")
-MUSCLE_SOFT_PP = Decimal("1.00")
-MUSCLE_HARD_PP = Decimal("3.00")
+FAT_SOFT_PP = Decimal("2.00")
+FAT_HARD_PP = Decimal("6.00")
+MUSCLE_SOFT_PP = Decimal("1.50")
+MUSCLE_HARD_PP = Decimal("4.00")
 
 TREND_WINDOW_DAYS = 30
 COMPARISON_WINDOW_DAYS = 30
 DIRECTION_THRESHOLD = Decimal("2")
+
+
+@dataclass(frozen=True)
+class AlgorithmConfig:
+    """Tunable scoring behaviour (defaults or per-profile CompassPreferences)."""
+
+    weight_importance: Decimal = WEIGHT_IMPORTANCE
+    body_fat_importance: Decimal = BODY_FAT_IMPORTANCE
+    muscle_importance: Decimal = MUSCLE_IMPORTANCE
+    weight_soft_kg: Decimal = WEIGHT_SOFT_KG
+    weight_hard_kg: Decimal = WEIGHT_HARD_KG
+    fat_soft_pp: Decimal = FAT_SOFT_PP
+    fat_hard_pp: Decimal = FAT_HARD_PP
+    muscle_soft_pp: Decimal = MUSCLE_SOFT_PP
+    muscle_hard_pp: Decimal = MUSCLE_HARD_PP
+    trend_window_days: int = TREND_WINDOW_DAYS
+    comparison_window_days: int = COMPARISON_WINDOW_DAYS
+
+    @classmethod
+    def defaults(cls) -> "AlgorithmConfig":
+        return cls()
 
 
 def _d(value) -> Decimal:
@@ -107,7 +131,9 @@ def component_scores(
     fat_max=None,
     muscle_min=None,
     muscle_max=None,
+    algorithm: AlgorithmConfig | None = None,
 ) -> dict[str, ComponentScore]:
+    algo = algorithm or AlgorithmConfig.defaults()
     return {
         "weight": ComponentScore(
             key="weight",
@@ -116,10 +142,10 @@ def component_scores(
                 weight_kg,
                 weight_min,
                 weight_max,
-                WEIGHT_SOFT_KG,
-                WEIGHT_HARD_KG,
-                WEIGHT_SOFT_KG,
-                WEIGHT_HARD_KG,
+                algo.weight_soft_kg,
+                algo.weight_hard_kg,
+                algo.weight_soft_kg,
+                algo.weight_hard_kg,
             ),
             value=_d(weight_kg) if weight_kg is not None else None,
             target_min=_d(weight_min) if weight_min is not None else None,
@@ -133,10 +159,10 @@ def component_scores(
                 body_fat_percent,
                 fat_min,
                 fat_max,
-                FAT_SOFT_PP,
-                FAT_HARD_PP,
-                FAT_SOFT_PP,
-                FAT_HARD_PP,
+                algo.fat_soft_pp,
+                algo.fat_hard_pp,
+                algo.fat_soft_pp,
+                algo.fat_hard_pp,
             ),
             value=_d(body_fat_percent) if body_fat_percent is not None else None,
             target_min=_d(fat_min) if fat_min is not None else None,
@@ -152,10 +178,10 @@ def component_scores(
                 muscle_percent,
                 muscle_min,
                 muscle_max,
-                MUSCLE_SOFT_PP,
-                MUSCLE_HARD_PP,
-                MUSCLE_SOFT_PP,
-                MUSCLE_HARD_PP,
+                algo.muscle_soft_pp,
+                algo.muscle_hard_pp,
+                algo.muscle_soft_pp,
+                algo.muscle_hard_pp,
             ),
             value=_d(muscle_percent) if muscle_percent is not None else None,
             target_min=_d(muscle_min) if muscle_min is not None else None,
@@ -167,12 +193,17 @@ def component_scores(
     }
 
 
-def overall_alignment(components: dict[str, ComponentScore]) -> tuple[Decimal | None, Decimal]:
+def overall_alignment(
+    components: dict[str, ComponentScore],
+    *,
+    algorithm: AlgorithmConfig | None = None,
+) -> tuple[Decimal | None, Decimal]:
     """Return (score, weight_mass_used) using available components only."""
+    algo = algorithm or AlgorithmConfig.defaults()
     weights = {
-        "weight": WEIGHT_IMPORTANCE,
-        "body_fat": BODY_FAT_IMPORTANCE,
-        "muscle": MUSCLE_IMPORTANCE,
+        "weight": algo.weight_importance,
+        "body_fat": algo.body_fat_importance,
+        "muscle": algo.muscle_importance,
     }
     total_w = Decimal("0")
     total = Decimal("0")

@@ -50,7 +50,30 @@ body {
   text-decoration: none;
 }
 
-.subtitle, .lede, .meta, .empty { color: var(--muted); }
+.profile-chip {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.profile-switch select {
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.2rem 0.45rem;
+  background: rgba(255, 252, 247, 0.9);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
 
 .nav {
   display: flex;
@@ -167,10 +190,19 @@ body {
 }
 
 .form-grid {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 200px));
+  justify-content: start;
 }
 
-.form-grid .wide, .actions.wide { grid-column: 1 / -1; }
+.form-grid .wide,
+.actions.wide {
+  grid-column: 1 / -1;
+  max-width: 28rem;
+}
+
+.actions.wide {
+  max-width: none;
+}
 
 label {
   display: grid;
@@ -189,6 +221,8 @@ input, select, textarea, button, .button {
 
 input, select, textarea {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 0.55rem 0.7rem;
@@ -258,6 +292,26 @@ button.danger { background: var(--danger); }
   border: 1px solid rgba(201, 210, 218, 0.8);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+}
+
+.toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.plain-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.plain-list li + li {
+  margin-top: 0.55rem;
+}
+
+.sim-results {
+  margin-top: 1rem;
 }
 
 .report {

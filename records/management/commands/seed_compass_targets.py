@@ -11,7 +11,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from records.models import ProfileTarget
-from records.views import get_or_create_default_profile
+from records.profiles import get_or_create_default_profile
 
 
 class Command(BaseCommand):

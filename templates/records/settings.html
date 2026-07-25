@@ -3,48 +3,58 @@
 {% block content %}
 <section class="page-head">
   <h1>Settings</h1>
-  <p>Profile, Body Compass target ranges, and trusted devices.</p>
+  <p>Profiles, Body Compass targets, algorithm prefs, and trusted devices.</p>
 </section>
 
-<section class="section">
-  <h2>Profile</h2>
-  <form method="post" class="stack form-grid">
-    {% csrf_token %}
-    {% for field in form %}
-    <label class="{% if field.field.widget.input_type == 'checkbox' %}checkbox wide{% endif %}">
-      {% if field.field.widget.input_type == 'checkbox' %}
-        {{ field }} <span>{{ field.label }}</span>
-      {% else %}
-        {{ field.label }}
-        {{ field }}
-      {% endif %}
-      {% if field.errors %}<span class="error">{{ field.errors|striptags }}</span>{% endif %}
-    </label>
-    {% endfor %}
-    <div class="actions wide">
-      <button type="submit" name="save_profile" value="1">Save profile</button>
-    </div>
-  </form>
-</section>
+<section class="section" id="profiles">
+  <h2>Profiles</h2>
+  <p class="meta">Each person has separate measurements, targets, and algorithm prefs. Switch anytime from the nav or here.</p>
+  <table class="table">
+    <thead>
+      <tr><th>Name</th><th>Height</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for p in all_profiles %}
+      <tr>
+        <td>{{ p.display_name }}</td>
+        <td>{{ p.height_cm }} cm</td>
+        <td>{% if active_profile and p.id == active_profile.id %}active{% else %}—{% endif %}</td>
+        <td>
+          {% if not active_profile or p.id != active_profile.id %}
+          <form method="post" action="{% url 'switch_profile' %}" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="profile_id" value="{{ p.id }}">
+            <input type="hidden" name="next" value="{% url 'settings' %}">
+            <button type="submit" class="linkish">Switch</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 
-<section class="section">
-  <h2>Body Compass — new target version</h2>
-  <p class="meta">Personal target ranges are stored in the database only. Create a new version instead of editing historical ones.</p>
+  <h3>Add profile</h3>
   <form method="post" class="stack form-grid">
     {% csrf_token %}
-    {{ target_form.non_field_errors }}
-    {% for field in target_form %}
-    <label>
+    {% for field in create_form %}
+    <label class="{% if field.name == 'display_name' or field.name == 'timezone' %}wide{% endif %}">
       {{ field.label }}
       {{ field }}
       {% if field.errors %}<span class="error">{{ field.errors|striptags }}</span>{% endif %}
     </label>
     {% endfor %}
     <div class="actions wide">
-      <button type="submit" name="save_target" value="1">Add target version</button>
+      <button type="submit" name="create_profile" value="1">Create profile</button>
     </div>
   </form>
+</section>
 
+<section class="section" id="targets">
+  <h2>Body Compass targets</h2>
+  <p class="meta">Personal ranges live in the database only. Add a new version when goals change — older versions stay for history.</p>
+
+  <h3>Existing versions</h3>
   <table class="table">
     <thead>
       <tr>
@@ -56,7 +66,7 @@
       {% for t in targets %}
       <tr>
         <td>{{ t.valid_from }}</td>
-        <td>{{ t.valid_to|default:"—" }}</td>
+        <td>{{ t.valid_to|default:"open" }}</td>
         <td>
           {% if t.weight_min_kg != None and t.weight_max_kg != None %}
             {{ t.weight_min_kg }}–{{ t.weight_max_kg }}
@@ -80,10 +90,130 @@
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="5">No targets yet.</td></tr>
+      <tr><td colspan="5">No targets yet. Add a version below.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+
+  <h3>Add target version</h3>
+  <form method="post" class="stack form-grid">
+    {% csrf_token %}
+    {{ target_form.non_field_errors }}
+    {% for field in target_form %}
+    <label>
+      {{ field.label }}
+      {{ field }}
+      {% if field.errors %}<span class="error">{{ field.errors|striptags }}</span>{% endif %}
+    </label>
+    {% endfor %}
+    <div class="actions wide">
+      <button type="submit" name="save_target" value="1">Add target version</button>
+    </div>
+  </form>
+
+  {% if preview %}
+  <h3>Active target preview</h3>
+  <p class="meta">
+    Trend window {{ preview.trend.window_days }} days versus current destination
+    (from {{ preview.valid_from }}{% if preview.valid_to %} to {{ preview.valid_to }}{% else %}, open{% endif %}).
+  </p>
+  <table class="table deltas">
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th class="num">Trend</th>
+        <th>Ideal</th>
+        <th>Soft band</th>
+        <th>Hard band</th>
+        <th>Position</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if preview.bands.weight %}
+      <tr>
+        <td>Weight</td>
+        <td class="num">{% if preview.trend.weight_kg != None %}{{ preview.trend.weight_kg }} kg{% else %}—{% endif %}</td>
+        <td>{{ preview.bands.weight.ideal_min }}–{{ preview.bands.weight.ideal_max }}</td>
+        <td>{{ preview.bands.weight.soft_min }}–{{ preview.bands.weight.soft_max }}</td>
+        <td>{{ preview.bands.weight.hard_min }}–{{ preview.bands.weight.hard_max }}</td>
+        <td>{{ preview.positions.weight|default:"—" }}</td>
+      </tr>
+      {% endif %}
+      {% if preview.bands.body_fat %}
+      <tr>
+        <td>Body fat</td>
+        <td class="num">{% if preview.trend.body_fat_percent != None %}{{ preview.trend.body_fat_percent }}%{% else %}—{% endif %}</td>
+        <td>{{ preview.bands.body_fat.ideal_min }}–{{ preview.bands.body_fat.ideal_max }}</td>
+        <td>{{ preview.bands.body_fat.soft_min }}–{{ preview.bands.body_fat.soft_max }}</td>
+        <td>{{ preview.bands.body_fat.hard_min }}–{{ preview.bands.body_fat.hard_max }}</td>
+        <td>{{ preview.positions.body_fat|default:"—" }}</td>
+      </tr>
+      {% endif %}
+      {% if preview.bands.muscle %}
+      <tr>
+        <td>Muscle</td>
+        <td class="num">{% if preview.trend.muscle_percent != None %}{{ preview.trend.muscle_percent }}%{% else %}—{% endif %}</td>
+        <td>{{ preview.bands.muscle.ideal_min }}–{{ preview.bands.muscle.ideal_max }}</td>
+        <td>{{ preview.bands.muscle.soft_min }}–{{ preview.bands.muscle.soft_max }}</td>
+        <td>{{ preview.bands.muscle.hard_min }}–{{ preview.bands.muscle.hard_max }}</td>
+        <td>{{ preview.positions.muscle|default:"—" }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+  {% if preview.signals %}
+  <p class="meta">Derived from active target:</p>
+  <ul class="plain-list">
+    {% for s in preview.signals %}
+    <li><strong>{{ s.label }}</strong>: {{ s.value }}{% if s.unit %} {{ s.unit }}{% endif %} — <span class="meta">{{ s.note }}</span></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% endif %}
+</section>
+
+<section class="section" id="algorithm">
+  <h2>Compass algorithm</h2>
+  <p class="meta">
+    Soft/hard bands and component weights are algorithm preferences, not personal destinations.
+    Defaults work for most profiles; tighten or widen bands if scores floor too often.
+  </p>
+  <form method="post" class="stack form-grid">
+    {% csrf_token %}
+    {{ prefs_form.non_field_errors }}
+    {% for field in prefs_form %}
+    <label>
+      {{ field.label }}
+      {{ field }}
+      {% if field.errors %}<span class="error">{{ field.errors|striptags }}</span>{% endif %}
+    </label>
+    {% endfor %}
+    <div class="actions wide">
+      <button type="submit" name="save_prefs" value="1">Save algorithm prefs</button>
+    </div>
+  </form>
+</section>
+
+<section class="section">
+  <h2>Active profile settings</h2>
+  <p class="meta">Editing “{{ profile.display_name }}”. Switch profiles above to change someone else’s settings.</p>
+  <form method="post" class="stack form-grid">
+    {% csrf_token %}
+    {% for field in form %}
+    <label class="{% if field.field.widget.input_type == 'checkbox' %}checkbox wide{% elif field.name == 'display_name' or field.name == 'timezone' or field.name == 'date_format' %}wide{% endif %}">
+      {% if field.field.widget.input_type == 'checkbox' %}
+        {{ field }} <span>{{ field.label }}</span>
+      {% else %}
+        {{ field.label }}
+        {{ field }}
+      {% endif %}
+      {% if field.errors %}<span class="error">{{ field.errors|striptags }}</span>{% endif %}
+    </label>
+    {% endfor %}
+    <div class="actions wide">
+      <button type="submit" name="save_profile" value="1">Save profile</button>
+    </div>
+  </form>
 </section>
 
 <section class="section">

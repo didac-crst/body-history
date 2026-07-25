@@ -22,7 +22,7 @@ class Opportunity:
     simulated_alignment: Decimal | None
 
 
-def _score_state(state: dict, target: dict) -> Decimal | None:
+def _score_state(state: dict, target: dict, algorithm=None) -> Decimal | None:
     comps = component_scores(
         weight_kg=state.get("weight_kg"),
         body_fat_percent=state.get("body_fat_percent"),
@@ -33,8 +33,9 @@ def _score_state(state: dict, target: dict) -> Decimal | None:
         fat_max=target.get("fat_max"),
         muscle_min=target.get("muscle_min"),
         muscle_max=target.get("muscle_max"),
+        algorithm=algorithm,
     )
-    score, _ = overall_alignment(comps)
+    score, _ = overall_alignment(comps, algorithm=algorithm)
     return score
 
 
@@ -45,13 +46,14 @@ def rank_opportunities(
     muscle_percent=None,
     target: dict,
     composition_available: bool,
+    algorithm=None,
 ) -> list[Opportunity]:
     base = {
         "weight_kg": weight_kg,
         "body_fat_percent": body_fat_percent,
         "muscle_percent": muscle_percent,
     }
-    base_score = _score_state(base, target)
+    base_score = _score_state(base, target, algorithm)
     if base_score is None:
         return [
             Opportunity(
@@ -127,7 +129,7 @@ def rank_opportunities(
             if fat_max is not None and body_fat_percent > fat_max:
                 # still allow, but fat-reduction candidate should usually win on gain
                 pass
-        sim = _score_state(state, target)
+        sim = _score_state(state, target, algorithm)
         if sim is None:
             continue
         gain = (sim - base_score).quantize(Decimal("0.01"))
@@ -143,6 +145,7 @@ def rank_opportunities(
                 fat_max=target.get("fat_max"),
                 muscle_min=target.get("muscle_min"),
                 muscle_max=target.get("muscle_max"),
+                algorithm=algorithm,
             )
             after = component_scores(
                 weight_kg=state.get("weight_kg"),
@@ -154,6 +157,7 @@ def rank_opportunities(
                 fat_max=target.get("fat_max"),
                 muscle_min=target.get("muscle_min"),
                 muscle_max=target.get("muscle_max"),
+                algorithm=algorithm,
             )
             if (
                 before["body_fat"].score is not None

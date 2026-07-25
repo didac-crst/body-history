@@ -1,10 +1,17 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Compass · {{ app_name }}{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+{% endblock %}
 {% block content %}
 <section class="page-head row">
   <div>
     <h1>Body Compass</h1>
     <p>Target alignment, direction, and primary opportunity. Composition estimates are best used as trends.</p>
+  </div>
+  <div class="actions">
+    <a class="button secondary" href="{% url 'settings' %}#targets">Manage targets</a>
   </div>
 </section>
 
@@ -17,7 +24,16 @@
     · {{ compass.confidence }} confidence · data {{ compass.freshness }}
   </p>
   {% else %}
-  <p class="meta">No alignment yet. Add measurements and configure ranges in Settings.</p>
+  <p class="meta">No alignment yet. Add measurements and <a href="{% url 'settings' %}#targets">configure ranges in Settings</a>.</p>
+  {% endif %}
+  {% if compass.target %}
+  <p class="meta">
+    Active target version from {{ compass.target.valid_from }}
+    {% if compass.target.valid_to %}to {{ compass.target.valid_to }}{% else %}(open){% endif %}.
+    <a href="{% url 'settings' %}#targets">View or add versions</a>
+  </p>
+  {% else %}
+  <p class="meta"><a href="{% url 'settings' %}#targets">Add target ranges in Settings</a> to unlock scoring.</p>
   {% endif %}
 </section>
 
@@ -51,6 +67,62 @@
   </table>
 </section>
 
+{% if attribution %}
+<section class="section">
+  <h2>What changed</h2>
+  <p class="meta">Component score movement versus the prior comparable period.</p>
+  <table class="table deltas">
+    <thead>
+      <tr><th>Component</th><th class="num">Δ score</th><th>Direction</th></tr>
+    </thead>
+    <tbody>
+      {% for row in attribution %}
+      <tr>
+        <td>{{ row.label }}</td>
+        <td class="num">{% if row.delta > 0 %}+{% endif %}{{ row.delta }}</td>
+        <td>{{ row.direction }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="section">
+  <h2>Alignment history</h2>
+  <p class="meta">
+    Default scoring uses today’s active target across the series.
+    Switch to “historical targets” to score each point with the version active on that date.
+  </p>
+  <form class="filters" id="compass-history-controls">
+    <label>
+      Range
+      <select id="compass-range">
+        <option value="30d">30 days</option>
+        <option value="90d">90 days</option>
+        <option value="1y" selected>1 year</option>
+        <option value="5y">5 years</option>
+        <option value="all">All time</option>
+      </select>
+    </label>
+    <label>
+      Target mode
+      <select id="compass-mode">
+        <option value="today" selected>Today’s target</option>
+        <option value="historical">Historical targets</option>
+      </select>
+    </label>
+  </form>
+  <div class="toggle-row" id="compass-series-toggles">
+    <label class="checkbox"><input type="checkbox" data-series="alignment" checked> Overall</label>
+    <label class="checkbox"><input type="checkbox" data-series="weight" checked> Weight</label>
+    <label class="checkbox"><input type="checkbox" data-series="body_fat" checked> Body fat</label>
+    <label class="checkbox"><input type="checkbox" data-series="muscle" checked> Muscle</label>
+  </div>
+  <div id="compass-history-chart" class="chart"></div>
+  <p class="meta" id="compass-history-meta"></p>
+</section>
+
 {% if compass.primary_opportunity %}
 <section class="section">
   <h2>Primary opportunity</h2>
@@ -66,6 +138,79 @@
   {% endif %}
 </section>
 {% endif %}
+
+{% if compass.guidance %}
+<section class="section">
+  <h2>Guidance</h2>
+  <ul class="plain-list">
+    {% for g in compass.guidance %}
+    <li><strong>{{ g.title }}</strong><br><span class="meta">{{ g.body }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if compass.signals %}
+<section class="section">
+  <h2>Fitness signals</h2>
+  <p class="meta">Derived context only — not medical labels and not part of the alignment score.</p>
+  <table class="table deltas">
+    <thead>
+      <tr><th>Signal</th><th class="num">Value</th><th>Note</th></tr>
+    </thead>
+    <tbody>
+      {% for s in compass.signals %}
+      <tr>
+        <td>{{ s.label }}</td>
+        <td class="num">{{ s.value }}{% if s.unit %} {{ s.unit }}{% endif %}</td>
+        <td class="meta">{{ s.note }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="section" id="simulator">
+  <h2>Opportunity simulator</h2>
+  <p class="meta">Adjust hypothetical values against the active target. Not medical advice — composition fields are consumer-scale estimates.</p>
+  <form class="filters form-grid" id="compass-sim-form">
+    <label>
+      Weight (kg)
+      <input type="number" step="0.1" id="sim-weight" name="weight_kg"
+        value="{% if compass.latest %}{{ compass.latest.weight_kg }}{% endif %}">
+    </label>
+    <label>
+      Body fat (%)
+      <input type="number" step="0.1" id="sim-fat" name="body_fat_percent"
+        value="{% if compass.latest.body_fat_percent != None %}{{ compass.latest.body_fat_percent }}{% endif %}">
+    </label>
+    <label>
+      Muscle (%)
+      <input type="number" step="0.1" id="sim-muscle" name="muscle_percent"
+        value="{% if compass.latest.muscle_percent != None %}{{ compass.latest.muscle_percent }}{% endif %}">
+    </label>
+    <div class="actions wide">
+      <button type="submit">Simulate</button>
+      <button type="button" class="secondary" id="sim-reset">Reset to latest</button>
+    </div>
+  </form>
+  <div id="sim-results" class="sim-results" hidden>
+    <p class="compass-score">Simulated alignment: <strong id="sim-alignment">—</strong> / 100</p>
+    <table class="table deltas">
+      <thead>
+        <tr><th>Component</th><th class="num">Value</th><th class="num">Score</th></tr>
+      </thead>
+      <tbody id="sim-components"></tbody>
+    </table>
+    <h3>Ranked opportunities</h3>
+    <ul id="sim-opportunities" class="plain-list"></ul>
+    <h3>Milestones</h3>
+    <ul id="sim-milestones" class="plain-list"></ul>
+    <h3>Guidance</h3>
+    <ul id="sim-guidance" class="plain-list"></ul>
+  </div>
+</section>
 
 {% if compass.latest %}
 <section class="section">
@@ -98,4 +243,14 @@
 {% for note in compass.notes %}
 <p class="meta">{{ note }}</p>
 {% endfor %}
+{% endblock %}
+{% block scripts %}
+<script>
+  window.COMPASS_LATEST = {
+    weight_kg: {% if compass.latest %}{{ compass.latest.weight_kg|default:"null" }}{% else %}null{% endif %},
+    body_fat_percent: {% if compass.latest and compass.latest.body_fat_percent != None %}{{ compass.latest.body_fat_percent }}{% else %}null{% endif %},
+    muscle_percent: {% if compass.latest and compass.latest.muscle_percent != None %}{{ compass.latest.muscle_percent }}{% else %}null{% endif %}
+  };
+</script>
+<script src="{% static 'js/compass.js' %}"></script>
 {% endblock %}

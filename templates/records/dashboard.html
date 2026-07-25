@@ -45,7 +45,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="meta">Configure target ranges in Settings to unlock Target Alignment.</p>
+  <p class="meta"><a href="{% url 'settings' %}#targets">Configure target ranges in Settings</a> to unlock Target Alignment.</p>
   {% endif %}
 
   {% if compass.primary_opportunity %}
@@ -53,9 +53,18 @@
   <p><strong>{{ compass.primary_opportunity.title }}</strong></p>
   <p class="meta">{{ compass.primary_opportunity.explanation }}</p>
   {% endif %}
+  {% if compass.guidance %}
+  <h3>Guidance</h3>
+  <ul class="plain-list">
+    {% for g in compass.guidance|slice:":2" %}
+    <li><strong>{{ g.title }}</strong> — <span class="meta">{{ g.body }}</span></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
   {% for note in compass.notes %}
   <p class="meta">{{ note }}</p>
   {% endfor %}
+  <p class="meta"><a href="{% url 'compass' %}">Open Compass</a> · <a href="{% url 'settings' %}#targets">Manage targets</a> · <a href="{% url 'settings' %}#algorithm">Algorithm prefs</a></p>
 </section>
 
 <div class="stats">

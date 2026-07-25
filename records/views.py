@@ -18,8 +18,20 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
 from .compass import evaluate_compass
-from .forms import ImportPathForm, LoginForm, MeasurementForm, ProfileForm, ProfileTargetForm
+from .compass_history import alignment_history, simulate_measurement
+from .forms import (
+    CompassPreferencesForm,
+    CreateProfileForm,
+    ImportPathForm,
+    LoginForm,
+    MeasurementForm,
+    ProfileForm,
+    ProfileTargetForm,
+)
 from .importer import import_workbook, parse_workbook, report_to_dict
+from .preferences import get_or_create_preferences
+from .preview import target_preview
+from .profiles import get_active_profile, get_or_create_default_profile, list_profiles, set_active_profile
 from .metrics import (
     calculate_bmi,
     calculate_fat_mass_kg,
@@ -41,15 +53,8 @@ from .trusted_devices import (
 )
 
 
-def get_or_create_default_profile() -> Profile:
-    profile = Profile.objects.order_by("created_at").first()
-    if profile:
-        return profile
-    return Profile.objects.create(
-        display_name="Default",
-        height_cm="181.00",
-        timezone=settings.TIME_ZONE,
-    )
+# Re-export for management commands that historically imported from views.
+__all__ = ["get_or_create_default_profile"]
 
 
 class BodyHistoryLoginView(LoginView):
@@ -105,7 +110,7 @@ def _parse_optional_percent(raw: str) -> Decimal | None:
 @require_http_methods(["GET", "POST"])
 def quick_add(request):
     """iPhone homescreen flow: weight → fat → muscle → date → review/save."""
-    profile = get_or_create_default_profile()
+    profile = get_active_profile(request)
     today = timezone.localdate()
     context = {
         "profile": profile,
@@ -150,6 +155,9 @@ def quick_add(request):
             if same_local_date_exists(profile, measured_at):
                 warnings.append("Another measurement already exists on this date.")
 
+            prior_snap = evaluate_compass(profile)
+            prior_alignment = prior_snap.alignment
+
             measurement = Measurement.objects.create(
                 profile=profile,
                 measured_at=measured_at,
@@ -167,7 +175,23 @@ def quick_add(request):
                 "muscle_percent": str(muscle) if muscle is not None else "",
                 "measured_on": measured_day.isoformat(),
             }
-            context["compass"] = evaluate_compass(profile, measurement=measurement).to_dict()
+            compass = evaluate_compass(profile, measurement=measurement).to_dict()
+            if (
+                prior_alignment is not None
+                and compass.get("alignment") is not None
+            ):
+                compass["alignment_delta_from_previous"] = float(
+                    (Decimal(str(compass["alignment"])) - prior_alignment).quantize(
+                        Decimal("0.01")
+                    )
+                )
+                compass["previous_alignment"] = float(prior_alignment)
+            else:
+                compass["alignment_delta_from_previous"] = None
+                compass["previous_alignment"] = (
+                    float(prior_alignment) if prior_alignment is not None else None
+                )
+            context["compass"] = compass
             context["measurement_id"] = str(measurement.id)
         except (InvalidOperation, ValueError, TypeError) as exc:
             context["error"] = str(exc)
@@ -177,7 +201,7 @@ def quick_add(request):
 
 @login_required
 def dashboard(request):
-    profile = get_or_create_default_profile()
+    profile = get_active_profile(request)
     metrics = dashboard_metrics(profile)
     compass = evaluate_compass(profile).to_dict()
     return render(
@@ -189,19 +213,78 @@ def dashboard(request):
 
 @login_required
 def compass_page(request):
-    profile = get_or_create_default_profile()
+    profile = get_active_profile(request)
     compass = evaluate_compass(profile).to_dict()
+    attribution = sorted(
+        [
+            {
+                "label": c["label"],
+                "direction": c.get("direction"),
+                "delta": c.get("direction_delta"),
+            }
+            for c in compass.get("components") or []
+            if c.get("direction_delta") is not None
+        ],
+        key=lambda row: abs(row["delta"]),
+        reverse=True,
+    )
     return render(
         request,
         "records/compass.html",
-        {"profile": profile, "compass": compass},
+        {
+            "profile": profile,
+            "compass": compass,
+            "attribution": attribution,
+        },
     )
+
+
+@login_required
+def compass_history_data(request):
+    profile = get_active_profile(request)
+    range_key = request.GET.get("range", "1y")
+    mode = request.GET.get("mode", "today")
+    if mode not in {"historical", "today"}:
+        mode = "today"
+    ranges = {
+        "30d": 30,
+        "90d": 90,
+        "1y": 365,
+        "5y": 365 * 5,
+        "all": None,
+    }
+    days = ranges.get(range_key, 365)
+    payload = alignment_history(profile, days=days, mode=mode)
+    payload["range"] = range_key
+    return JsonResponse(payload)
+
+
+@login_required
+def compass_simulate(request):
+    profile = get_active_profile(request)
+
+    def _parse(name):
+        raw = request.GET.get(name, "").strip()
+        if raw == "":
+            return None
+        return Decimal(raw)
+
+    try:
+        payload = simulate_measurement(
+            profile,
+            weight_kg=_parse("weight_kg"),
+            body_fat_percent=_parse("body_fat_percent"),
+            muscle_percent=_parse("muscle_percent"),
+        )
+    except (InvalidOperation, ValueError) as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    return JsonResponse(payload)
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
 def measurement_create(request):
-    profile = get_or_create_default_profile()
+    profile = get_active_profile(request)
     form = MeasurementForm(request.POST or None, profile=profile)
     if request.method == "POST" and form.is_valid():
         measurement = form.save(commit=False)
@@ -223,7 +306,7 @@ def measurement_create(request):
 @login_required
 @require_http_methods(["GET", "POST"])
 def measurement_edit(request, pk):
-    profile = get_or_create_default_profile()
+    profile = get_active_profile(request)
     measurement = get_object_or_404(Measurement, pk=pk, profile=profile)
     form = MeasurementForm(request.POST or None, instance=measurement, profile=profile)
     if request.method == "POST" and form.is_valid():
@@ -247,7 +330,7 @@ def measurement_edit(request, pk):
 @login_required
 @require_http_methods(["GET", "POST"])
 def measurement_delete(request, pk):
-    profile = get_or_create_default_profile()
+    profile = get_active_profile(request)
     measurement = get_object_or_404(Measurement, pk=pk, profile=profile)
     if request.method == "POST":
         measurement.delete()
@@ -262,7 +345,7 @@ def measurement_delete(request, pk):
 
 @login_required
 def history(request):
-    profile = get_or_create_default_profile()
+    profile = get_active_profile(request)
     qs = profile.measurements.all()
     source = request.GET.get("source")
     if source:
@@ -305,7 +388,7 @@ def history(request):
 
 @login_required
 def export_csv(request):
-    profile = get_or_create_default_profile()
+    profile = get_active_profile(request)
     include_excluded = request.GET.get("excluded") == "1"
     qs = measurement_queryset(profile, include_excluded=include_excluded).order_by("measured_at")
 
@@ -349,13 +432,13 @@ def export_csv(request):
 
 @login_required
 def chart_page(request):
-    profile = get_or_create_default_profile()
+    profile = get_active_profile(request)
     return render(request, "records/chart.html", {"profile": profile})
 
 
 @login_required
 def chart_data(request):
-    profile = get_or_create_default_profile()
+    profile = get_active_profile(request)
     metric = request.GET.get("metric", "weight_kg")
     range_key = request.GET.get("range", "1y")
     ranges = {
@@ -432,9 +515,12 @@ def chart_data(request):
 @login_required
 @require_http_methods(["GET", "POST"])
 def settings_view(request):
-    profile = get_or_create_default_profile()
+    profile = get_active_profile(request)
     form = ProfileForm(request.POST or None, instance=profile)
     target_form = ProfileTargetForm(prefix="target")
+    create_form = CreateProfileForm(prefix="create")
+    prefs = get_or_create_preferences(profile)
+    prefs_form = CompassPreferencesForm(prefix="prefs", instance=prefs)
     if request.method == "POST" and "save_profile" in request.POST:
         if form.is_valid():
             form.save()
@@ -453,9 +539,26 @@ def settings_view(request):
             target.save()
             messages.success(request, "Target version saved.")
             return redirect("settings")
+    if request.method == "POST" and "save_prefs" in request.POST:
+        prefs_form = CompassPreferencesForm(request.POST, prefix="prefs", instance=prefs)
+        if prefs_form.is_valid():
+            prefs_form.save()
+            messages.success(request, "Compass algorithm preferences saved.")
+            return redirect("settings")
+    if request.method == "POST" and "create_profile" in request.POST:
+        create_form = CreateProfileForm(request.POST, prefix="create")
+        if create_form.is_valid():
+            new_profile = create_form.save()
+            set_active_profile(request, new_profile)
+            messages.success(
+                request,
+                f"Created profile “{new_profile.display_name}” and switched to it.",
+            )
+            return redirect("settings")
 
     devices = TrustedDevice.objects.filter(user=request.user).order_by("-last_seen_at")
     targets = profile.targets.all()
+    preview = target_preview(profile)
     return render(
         request,
         "records/settings.html",
@@ -463,10 +566,27 @@ def settings_view(request):
             "profile": profile,
             "form": form,
             "target_form": target_form,
+            "prefs_form": prefs_form,
+            "create_form": create_form,
             "targets": targets,
             "devices": devices,
+            "preview": preview,
+            "all_profiles": list_profiles(),
         },
     )
+
+
+@login_required
+@require_POST
+def switch_profile(request):
+    profile_id = request.POST.get("profile_id")
+    profile = get_object_or_404(Profile, pk=profile_id)
+    set_active_profile(request, profile)
+    messages.success(request, f"Switched to profile “{profile.display_name}”.")
+    next_url = request.POST.get("next") or "dashboard"
+    if next_url.startswith("/"):
+        return redirect(next_url)
+    return redirect(next_url)
 
 
 @login_required
@@ -492,7 +612,7 @@ def logout_all_devices(request):
 @login_required
 @require_http_methods(["GET", "POST"])
 def import_page(request):
-    profile = get_or_create_default_profile()
+    profile = get_active_profile(request)
     form = ImportPathForm(request.POST or None)
     report = None
     batch = None

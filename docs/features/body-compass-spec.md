@@ -2,6 +2,11 @@
 
 Product/feature brief for Body Compass.
 
+**Implementation status:** phases 1–6 and the acceptance criteria below are
+implemented. Treat [body-compass-as-built.md](body-compass-as-built.md) as the
+source of truth for what ships today; this document remains the original product
+brief.
+
 For what is already shipped, see [body-compass-as-built.md](body-compass-as-built.md).
 
 ## Purpose
@@ -221,6 +226,16 @@ Weight:   25%
 Body fat: 45%
 Muscle:   30%
 ```
+
+Default soft/hard outer bands (same on both sides of the ideal range unless preferences override later):
+
+```text
+Weight:  soft 1.0 kg,  hard 3.0 kg
+Body fat: soft 2.0 pp, hard 6.0 pp
+Muscle:  soft 1.5 pp,  hard 4.0 pp
+```
+
+Fat and muscle use wider bands than weight so typical consumer-scale readings remain in a useful score range when targets are aspirational.
 
 ## Confidence
 
@@ -522,6 +537,12 @@ Required unit tests:
 - interactive simulator;
 - richer explanations;
 - optional extra fitness signals.
+
+### Phase 6 — Household profiles and Settings polish
+
+- multi-profile create / switch (session active profile);
+- settings target preview against trend and soft/hard bands;
+- post-save alignment delta versus previous reading.
 
 ## Acceptance Criteria
 

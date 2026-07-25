@@ -3,7 +3,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.utils import timezone
 
 from .metrics import convert_fraction_to_percent, same_local_date_exists
-from .models import Measurement, Profile, ProfileTarget
+from .models import CompassPreferences, Measurement, Profile, ProfileTarget
 
 
 class LoginForm(AuthenticationForm):
@@ -99,6 +99,27 @@ class ProfileForm(forms.ModelForm):
             "smoothing_window_days",
             "include_excluded_in_summaries",
         ]
+        widgets = {
+            "display_name": forms.TextInput(),
+            "timezone": forms.TextInput(),
+            "date_format": forms.TextInput(),
+            "weight_unit": forms.TextInput(),
+        }
+
+
+class CreateProfileForm(forms.ModelForm):
+    class Meta:
+        model = Profile
+        fields = ["display_name", "height_cm", "timezone"]
+        widgets = {
+            "display_name": forms.TextInput(),
+            "timezone": forms.TextInput(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.is_bound:
+            self.initial.setdefault("timezone", "Europe/Paris")
 
 
 class ProfileTargetForm(forms.ModelForm):
@@ -136,6 +157,48 @@ class ProfileTargetForm(forms.ModelForm):
                 self.add_error(hi_name, f"{label} min must be <= max.")
         if not configured:
             self.add_error(None, "Configure at least one target dimension.")
+        return cleaned
+
+
+class CompassPreferencesForm(forms.ModelForm):
+    class Meta:
+        model = CompassPreferences
+        fields = [
+            "weight_importance",
+            "body_fat_importance",
+            "muscle_importance",
+            "weight_soft_kg",
+            "weight_hard_kg",
+            "fat_soft_pp",
+            "fat_hard_pp",
+            "muscle_soft_pp",
+            "muscle_hard_pp",
+            "trend_window_days",
+            "comparison_window_days",
+        ]
+        labels = {
+            "weight_importance": "Weight importance (0–1)",
+            "body_fat_importance": "Body fat importance (0–1)",
+            "muscle_importance": "Muscle importance (0–1)",
+            "weight_soft_kg": "Weight soft band (kg)",
+            "weight_hard_kg": "Weight hard band (kg)",
+            "fat_soft_pp": "Body fat soft band (pp)",
+            "fat_hard_pp": "Body fat hard band (pp)",
+            "muscle_soft_pp": "Muscle soft band (pp)",
+            "muscle_hard_pp": "Muscle hard band (pp)",
+            "trend_window_days": "Trend window (days)",
+            "comparison_window_days": "Comparison window (days)",
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        total = (
+            (cleaned.get("weight_importance") or 0)
+            + (cleaned.get("body_fat_importance") or 0)
+            + (cleaned.get("muscle_importance") or 0)
+        )
+        if total <= 0:
+            self.add_error(None, "Importance weights must sum to a positive value.")
         return cleaned
 
 

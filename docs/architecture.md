@@ -28,22 +28,34 @@ flowchart LR
   dash --> excel["/import/"]
   dash --> settings["/settings/"]
   history --> csv["/history/export.csv"]
-  manual --> postSave["Post-save Compass overview"]
+  compass --> histApi["/api/compass-history/"]
+  compass --> simApi["/api/compass-simulate/"]
+  manual --> postSave["Post-save Compass + alignment delta"]
+  settings --> switch["/settings/switch-profile/"]
 ```
 
 ## Important routes
 
 | Path | Purpose |
 |------|---------|
-| `/` | Dashboard (latest metrics + Target Alignment card) |
-| `/compass/` | Body Compass detail (alignment, opportunity, latest vs trend) |
-| `/manual_import/` | Phone step-by-step measurement entry + post-save Compass |
+| `/` | Dashboard (latest metrics + Target Alignment + guidance) |
+| `/compass/` | Body Compass detail (scores, history chart, simulator, signals) |
+| `/api/compass-history/` | Alignment / component score series JSON |
+| `/api/compass-simulate/` | Counterfactual score JSON |
+| `/manual_import/` | Phone step-by-step entry + post-save Compass |
 | `/history/` | Table + filters |
 | `/history/export.csv` | CSV export with derived BMI / fat mass |
-| `/chart/` | Trend chart (raw points + smooth) |
+| `/chart/` | Metric trend chart (raw + smooth) |
 | `/import/` | Excel dry-run / import UI |
-| `/settings/` | Profile, versioned target ranges, trusted devices |
+| `/settings/` | Profiles, targets, algorithm prefs, profile fields, devices |
+| `/settings/switch-profile/` | POST switch active profile (session) |
 | `/login/` | Sign-in |
+
+## Profiles
+
+Household support uses multiple `Profile` rows. The **active profile** is stored in the
+Django session (`active_profile_id`). All measurement / Compass / settings writes
+apply to that profile. Shared login — not per-user ownership yet.
 
 ## Manual import flow
 
@@ -53,22 +65,29 @@ flowchart LR
   f --> m["3. Muscle %"]
   m --> d["4. Date"]
   d --> r["5. Review and save"]
-  r --> c["Post-save Compass"]
+  r --> c["Post-save Compass + Δ vs previous"]
 ```
 
 ## Body Compass modules
 
 ```mermaid
 flowchart TB
-  views["views / templates"] --> compass["records/compass.py"]
+  views["views / templates"] --> compass["compass.py"]
+  views --> history["compass_history.py"]
+  views --> preview["preview.py"]
+  views --> profiles["profiles.py"]
   compass --> scoring["scoring.py"]
   compass --> trends["trends.py"]
   compass --> recs["recommendations.py"]
-  compass --> metrics["metrics.py"]
-  compass --> db["ProfileTarget ranges in DB"]
+  compass --> guidance["guidance.py"]
+  compass --> prefs["preferences.py"]
+  history --> scoring
+  history --> prefs
+  compass --> db["ProfileTarget + CompassPreferences in DB"]
 ```
 
-Personal target numbers live only in `ProfileTarget` rows. Code may contain algorithm defaults (weights, windows, tolerances), never personal destinations.
+Personal **target destinations** live only in `ProfileTarget` rows.  
+Algorithm defaults live in `scoring.AlgorithmConfig`; optional overrides in `CompassPreferences`.
 
 ## Domain model (summary)
 
@@ -76,6 +95,7 @@ Personal target numbers live only in `ProfileTarget` rows. Code may contain algo
 erDiagram
   PROFILE ||--o{ MEASUREMENT : has
   PROFILE ||--o{ PROFILE_TARGET : has
+  PROFILE ||--o| COMPASS_PREFERENCES : has
   PROFILE ||--o{ IMPORT_BATCH : has
   IMPORT_BATCH ||--o{ MEASUREMENT_IMPORT_ROW : contains
   MEASUREMENT ||--o| MEASUREMENT_IMPORT_ROW : may_link
@@ -105,6 +125,14 @@ erDiagram
     numeric body_fat_max_percent
     numeric muscle_min_percent
     numeric muscle_max_percent
+  }
+  COMPASS_PREFERENCES {
+    uuid id
+    numeric weight_importance
+    numeric body_fat_importance
+    numeric muscle_importance
+    numeric fat_soft_pp
+    numeric fat_hard_pp
   }
   IMPORT_BATCH {
     uuid id

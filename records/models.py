@@ -123,6 +123,70 @@ class ProfileTarget(TimeStampedModel):
         return f"{self.profile} from {self.valid_from}"
 
 
+class CompassPreferences(TimeStampedModel):
+    """Per-profile algorithm prefs (not personal target destinations)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    profile = models.OneToOneField(
+        Profile, on_delete=models.CASCADE, related_name="compass_preferences"
+    )
+    weight_importance = models.DecimalField(
+        max_digits=4, decimal_places=2, default=Decimal("0.25")
+    )
+    body_fat_importance = models.DecimalField(
+        max_digits=4, decimal_places=2, default=Decimal("0.45")
+    )
+    muscle_importance = models.DecimalField(
+        max_digits=4, decimal_places=2, default=Decimal("0.30")
+    )
+    weight_soft_kg = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("1.00")
+    )
+    weight_hard_kg = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("3.00")
+    )
+    fat_soft_pp = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("2.00")
+    )
+    fat_hard_pp = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("6.00")
+    )
+    muscle_soft_pp = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("1.50")
+    )
+    muscle_hard_pp = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("4.00")
+    )
+    trend_window_days = models.PositiveIntegerField(default=30)
+    comparison_window_days = models.PositiveIntegerField(default=30)
+
+    class Meta:
+        db_table = "compass_preferences"
+
+    def clean(self):
+        super().clean()
+        total = self.weight_importance + self.body_fat_importance + self.muscle_importance
+        if total <= 0:
+            raise ValidationError("Importance weights must sum to a positive value.")
+        pairs = [
+            ("weight_soft_kg", "weight_hard_kg", "Weight"),
+            ("fat_soft_pp", "fat_hard_pp", "Body fat"),
+            ("muscle_soft_pp", "muscle_hard_pp", "Muscle"),
+        ]
+        for soft_name, hard_name, label in pairs:
+            soft = getattr(self, soft_name)
+            hard = getattr(self, hard_name)
+            if soft is not None and hard is not None and soft > hard:
+                raise ValidationError({hard_name: f"{label} soft must be <= hard."})
+            if soft is not None and soft < 0:
+                raise ValidationError({soft_name: f"{label} soft must be >= 0."})
+            if hard is not None and hard <= 0:
+                raise ValidationError({hard_name: f"{label} hard must be > 0."})
+
+    def __str__(self) -> str:
+        return f"Compass prefs for {self.profile}"
+
+
 class Measurement(TimeStampedModel):
     SOURCE_MANUAL = "manual"
     SOURCE_IMPORT = "import"

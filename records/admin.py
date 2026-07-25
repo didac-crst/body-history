@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    CompassPreferences,
     ImportBatch,
     Measurement,
     MeasurementImportRow,
@@ -24,6 +25,19 @@ class ProfileTargetAdmin(admin.ModelAdmin):
         "target_bmi",
         "target_body_fat_percent",
         "target_muscle_percent",
+    )
+
+
+@admin.register(CompassPreferences)
+class CompassPreferencesAdmin(admin.ModelAdmin):
+    list_display = (
+        "profile",
+        "weight_importance",
+        "body_fat_importance",
+        "muscle_importance",
+        "fat_soft_pp",
+        "fat_hard_pp",
+        "updated_at",
     )
 
 
