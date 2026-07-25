@@ -50,7 +50,31 @@ def set_trusted_device_cookie(response, raw_token: str) -> None:
 
 
 def clear_trusted_device_cookie(response) -> None:
-    response.delete_cookie(settings.TRUSTED_DEVICE_COOKIE_NAME, path="/")
+    # Match set_cookie attributes so browsers actually drop the cookie.
+    response.set_cookie(
+        settings.TRUSTED_DEVICE_COOKIE_NAME,
+        "",
+        max_age=0,
+        expires="Thu, 01 Jan 1970 00:00:00 GMT",
+        httponly=settings.TRUSTED_DEVICE_COOKIE_HTTPONLY,
+        secure=settings.TRUSTED_DEVICE_COOKIE_SECURE,
+        samesite=settings.TRUSTED_DEVICE_COOKIE_SAMESITE,
+        path="/",
+    )
+
+
+def revoke_current_device_from_request(request) -> bool:
+    """Revoke the trusted-device row matching this request's cookie, if any."""
+    raw = request.COOKIES.get(settings.TRUSTED_DEVICE_COOKIE_NAME)
+    if not raw or not request.user.is_authenticated:
+        return False
+    device = TrustedDevice.objects.filter(
+        user=request.user, token_hash=hash_token(raw), revoked_at__isnull=True
+    ).first()
+    if device is None:
+        return False
+    revoke_device(device)
+    return True
 
 
 def authenticate_trusted_device(request) -> User | None:

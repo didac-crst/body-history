@@ -34,13 +34,16 @@ flowchart TD
 - Server stores only a hash of the device token.
 - Default device lifetime: 180 days.
 - Devices can be revoked in **Settings**; logout-all revokes active devices.
+- **Logout** also revokes the current browser’s trusted-device token and clears
+  its cookie (session logout alone would be undone by trusted-device middleware).
 
-## Profiles and household use
+## Profiles and ownership
 
-Multiple profiles share the same login. The active profile id is kept in the
-**session**. Anyone signed in can switch profiles and see that profile’s
-measurements and targets. This is intentional for a private household app; it is
-not per-user ACL isolation.
+Each Django UI user has exactly one body profile (`Profile.user` is one-to-one).
+Measurements, targets, and Compass prefs hang off that profile. Another user’s
+data is never visible in the app UI.
+
+Trusted devices remain scoped to the Django user (same as the profile owner).
 
 ## Public hostname
 
@@ -54,6 +57,22 @@ LAN / direct port (private network), example shape only:
 ```
 
 Prefer HTTPS via the tunnel; keep `DJANGO_SECURE_COOKIES=1` when browsers use HTTPS.
+`DJANGO_BEHIND_PROXY=1` (default) trusts `X-Forwarded-Proto` from Cloudflare.
+
+Cookies used by the app:
+
+| Cookie | Role |
+|--------|------|
+| `bh_sessionid` | Django session (holds CSRF secret when `CSRF_USE_SESSIONS` is on) |
+| `bh_trusted_device` | Long-lived device login (HttpOnly; server stores hash only) |
+
+A stale login form POST is redirected to `/login/?expired=1` with a fresh token
+instead of leaving you on Django’s raw CSRF 403 page.
+
+If sign-in still fails with CSRF / “form expired”:
+
+1. Clear site cookies for the Body History host (or use a private window).
+2. Open a fresh `/login/` over HTTPS and sign in once.
 
 ## Git hygiene
 

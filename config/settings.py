@@ -33,6 +33,12 @@ CSRF_TRUSTED_ORIGINS = [
 
 SECURE_COOKIES = env_bool("DJANGO_SECURE_COOKIES", default=False)
 
+# Cloudflare / reverse-proxy TLS termination. Without this, Django sees plain HTTP
+# while the browser Origin is https://… and cookie Secure flags get confusing.
+if env_bool("DJANGO_BEHIND_PROXY", default=True):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -133,12 +139,18 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 
+# App-specific names avoid clashes with leftover default sessionid/csrftoken
+# cookies from earlier HTTP↔HTTPS visits (those caused CSRF token mismatches).
+SESSION_COOKIE_NAME = "bh_sessionid"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_SECURE = SECURE_COOKIES
+CSRF_USE_SESSIONS = True
+CSRF_COOKIE_NAME = "bh_csrftoken"
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = SECURE_COOKIES
+CSRF_FAILURE_VIEW = "records.csrf.csrf_failure"
 
 TRUSTED_DEVICE_COOKIE_NAME = "bh_trusted_device"
 TRUSTED_DEVICE_COOKIE_HTTPONLY = True

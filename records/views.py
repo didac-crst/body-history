@@ -15,13 +15,23 @@ from django.db.models import Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.middleware.csrf import get_token
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods, require_POST
 
+from .charts import (
+    alignment_sparkline,
+    component_mini_bars,
+    opportunity_impact,
+    position_vs_target,
+    sparkline_polyline,
+)
 from .compass import evaluate_compass
 from .compass_history import alignment_history, simulate_measurement
 from .forms import (
     CompassPreferencesForm,
-    CreateProfileForm,
     ImportPathForm,
     LoginForm,
     MeasurementForm,
@@ -29,9 +39,9 @@ from .forms import (
     ProfileTargetForm,
 )
 from .importer import import_workbook, parse_workbook, report_to_dict
-from .preferences import get_or_create_preferences
+from .preferences import get_or_create_preferences, resolve_algorithm
 from .preview import target_preview
-from .profiles import get_active_profile, get_or_create_default_profile, list_profiles, set_active_profile
+from .profiles import get_active_profile, get_or_create_default_profile
 from .metrics import (
     calculate_bmi,
     calculate_fat_mass_kg,
@@ -43,11 +53,12 @@ from .metrics import (
     smooth_series,
     target_for_date,
 )
-from .models import ImportBatch, Measurement, Profile, ProfileTarget, TrustedDevice
+from .models import ImportBatch, Measurement, ProfileTarget, TrustedDevice
 from .trusted_devices import (
     clear_trusted_device_cookie,
     issue_trusted_device,
     revoke_all_devices,
+    revoke_current_device_from_request,
     revoke_device,
     set_trusted_device_cookie,
 )
@@ -57,10 +68,39 @@ from .trusted_devices import (
 __all__ = ["get_or_create_default_profile"]
 
 
+def _clear_legacy_auth_cookies(response) -> None:
+    """Drop old default cookie names that conflict after HTTP/HTTPS mixing."""
+    for name in ("sessionid", "csrftoken"):
+        response.delete_cookie(name, path="/")
+        response.delete_cookie(name, path="/", samesite="Lax")
+        if settings.SESSION_COOKIE_SECURE:
+            response.set_cookie(
+                name,
+                "",
+                max_age=0,
+                expires="Thu, 01 Jan 1970 00:00:00 GMT",
+                path="/",
+                secure=True,
+                samesite="Lax",
+            )
+
+
 class BodyHistoryLoginView(LoginView):
     template_name = "registration/login.html"
     authentication_form = LoginForm
     redirect_authenticated_user = True
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["form_expired"] = self.request.GET.get("expired") == "1"
+        return ctx
+
+    def get(self, request, *args, **kwargs):
+        # After a CSRF miss, start a clean session secret so the next submit matches.
+        if request.GET.get("expired") == "1":
+            request.session.cycle_key()
+        get_token(request)
+        return super().get(request, *args, **kwargs)
 
     def form_valid(self, response_form):
         response = super().form_valid(response_form)
@@ -68,31 +108,41 @@ class BodyHistoryLoginView(LoginView):
             _, raw = issue_trusted_device(self.request.user, self.request)
             set_trusted_device_cookie(response, raw)
             messages.success(self.request, "This device is now trusted for 180 days.")
+        _clear_legacy_auth_cookies(response)
+        return response
+
+    def form_invalid(self, form):
+        response = super().form_invalid(form)
+        _clear_legacy_auth_cookies(response)
+        return response
+
+    @method_decorator(csrf_protect)
+    @method_decorator(never_cache)
+    def dispatch(self, request, *args, **kwargs):
+        get_token(request)
+        response = super().dispatch(request, *args, **kwargs)
+        response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response["Pragma"] = "no-cache"
+        response["CDN-Cache-Control"] = "no-store"
+        response["Vary"] = "Cookie"
+        _clear_legacy_auth_cookies(response)
         return response
 
 
 @require_POST
 @login_required
 def logout_view(request):
-    revoke_current = request.POST.get("revoke_device") == "1"
+    # Always drop this browser's trusted-device cookie on Logout; otherwise
+    # TrustedDeviceMiddleware immediately signs the user back in.
     logout_all = request.POST.get("logout_all") == "1"
     response = redirect("login")
     if logout_all:
         revoke_all_devices(request.user)
-        clear_trusted_device_cookie(response)
-        messages.info(request, "Signed out of all trusted devices.")
-    elif revoke_current:
-        raw = request.COOKIES.get(settings.TRUSTED_DEVICE_COOKIE_NAME)
-        if raw:
-            from .trusted_devices import hash_token
-
-            device = TrustedDevice.objects.filter(
-                user=request.user, token_hash=hash_token(raw), revoked_at__isnull=True
-            ).first()
-            if device:
-                revoke_device(device)
-        clear_trusted_device_cookie(response)
+    else:
+        revoke_current_device_from_request(request)
+    clear_trusted_device_cookie(response)
     logout(request)
+    _clear_legacy_auth_cookies(response)
     return response
 
 
@@ -193,6 +243,10 @@ def quick_add(request):
                 )
             context["compass"] = compass
             context["measurement_id"] = str(measurement.id)
+            spark = alignment_sparkline(profile)
+            context["sparkline"] = spark
+            context["sparkline_points"] = sparkline_polyline(spark)
+            context["component_bars"] = component_mini_bars(compass.get("components"))
         except (InvalidOperation, ValueError, TypeError) as exc:
             context["error"] = str(exc)
 
@@ -204,10 +258,33 @@ def dashboard(request):
     profile = get_active_profile(request)
     metrics = dashboard_metrics(profile)
     compass = evaluate_compass(profile).to_dict()
+    ranges = {}
+    if compass.get("target"):
+        t = compass["target"]
+        ranges = {
+            "weight_min": t.get("weight_min"),
+            "weight_max": t.get("weight_max"),
+            "fat_min": t.get("fat_min"),
+            "fat_max": t.get("fat_max"),
+            "muscle_min": t.get("muscle_min"),
+            "muscle_max": t.get("muscle_max"),
+        }
+    spark = alignment_sparkline(profile)
     return render(
         request,
         "records/dashboard.html",
-        {"profile": profile, "metrics": metrics, "compass": compass},
+        {
+            "profile": profile,
+            "metrics": metrics,
+            "compass": compass,
+            "sparkline": spark,
+            "sparkline_points": sparkline_polyline(spark),
+            "component_bars": component_mini_bars(compass.get("components")),
+            "impact": opportunity_impact(
+                compass.get("opportunities"),
+                current_alignment=compass.get("alignment"),
+            ),
+        },
     )
 
 
@@ -228,6 +305,17 @@ def compass_page(request):
         key=lambda row: abs(row["delta"]),
         reverse=True,
     )
+    ranges = {}
+    if compass.get("target"):
+        t = compass["target"]
+        ranges = {
+            "weight_min": t.get("weight_min"),
+            "weight_max": t.get("weight_max"),
+            "fat_min": t.get("fat_min"),
+            "fat_max": t.get("fat_max"),
+            "muscle_min": t.get("muscle_min"),
+            "muscle_max": t.get("muscle_max"),
+        }
     return render(
         request,
         "records/compass.html",
@@ -235,6 +323,13 @@ def compass_page(request):
             "profile": profile,
             "compass": compass,
             "attribution": attribution,
+            "position_rows": position_vs_target(
+                profile, ranges=ranges, algorithm=resolve_algorithm(profile)
+            ),
+            "impact": opportunity_impact(
+                compass.get("opportunities"),
+                current_alignment=compass.get("alignment"),
+            ),
         },
     )
 
@@ -518,7 +613,6 @@ def settings_view(request):
     profile = get_active_profile(request)
     form = ProfileForm(request.POST or None, instance=profile)
     target_form = ProfileTargetForm(prefix="target")
-    create_form = CreateProfileForm(prefix="create")
     prefs = get_or_create_preferences(profile)
     prefs_form = CompassPreferencesForm(prefix="prefs", instance=prefs)
     if request.method == "POST" and "save_profile" in request.POST:
@@ -545,16 +639,6 @@ def settings_view(request):
             prefs_form.save()
             messages.success(request, "Compass algorithm preferences saved.")
             return redirect("settings")
-    if request.method == "POST" and "create_profile" in request.POST:
-        create_form = CreateProfileForm(request.POST, prefix="create")
-        if create_form.is_valid():
-            new_profile = create_form.save()
-            set_active_profile(request, new_profile)
-            messages.success(
-                request,
-                f"Created profile “{new_profile.display_name}” and switched to it.",
-            )
-            return redirect("settings")
 
     devices = TrustedDevice.objects.filter(user=request.user).order_by("-last_seen_at")
     targets = profile.targets.all()
@@ -567,26 +651,11 @@ def settings_view(request):
             "form": form,
             "target_form": target_form,
             "prefs_form": prefs_form,
-            "create_form": create_form,
             "targets": targets,
             "devices": devices,
             "preview": preview,
-            "all_profiles": list_profiles(),
         },
     )
-
-
-@login_required
-@require_POST
-def switch_profile(request):
-    profile_id = request.POST.get("profile_id")
-    profile = get_object_or_404(Profile, pk=profile_id)
-    set_active_profile(request, profile)
-    messages.success(request, f"Switched to profile “{profile.display_name}”.")
-    next_url = request.POST.get("next") or "dashboard"
-    if next_url.startswith("/"):
-        return redirect(next_url)
-    return redirect(next_url)
 
 
 @login_required

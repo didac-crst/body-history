@@ -50,13 +50,17 @@ Only `.env.example` belongs in git for environment documentation.
 
 ## Main features
 
-- Dashboard with latest values, period deltas, Target Alignment, and guidance
-- **Body Compass** (`/compass/`): component scores, direction, attribution, history chart, simulator, milestones, fitness signals
-- Multi-profile household switching (session active profile)
+- Dashboard with latest values, period deltas, Target Alignment (sparkline + component mini-bars), and guidance
+- **Body Compass** (`/compass/`):
+  - Alignment History (overall + components)
+  - Position vs Target range bars
+  - Opportunity Impact ranked bars
+  - interactive simulator, milestones, fitness signals
+- One body profile per UI user
 - History table, CSV export, metric trend chart
-- Excel dry-run + audited import (scoped to active profile)
+- Excel dry-run + audited import (scoped to that profile)
 - Versioned target **ranges** + algorithm prefs in Settings (DB-only personal data)
-- `/manual_import/` phone-friendly step flow with post-save Compass + alignment delta:
+- `/manual_import/` phone-friendly step flow with **Close** to dashboard, post-save Compass + alignment delta + mini-charts:
 
 ```mermaid
 flowchart LR
@@ -71,7 +75,8 @@ flowchart LR
 
 See [docs/README.md](docs/README.md) for the doc index, including:
 
-- [docs/operations.md](docs/operations.md) — deploy, bootstrap, import, profiles, Compass
+- [docs/evolutions.md](docs/evolutions.md) — later product/platform decisions
+- [docs/operations.md](docs/operations.md) — deploy, UI-user CLI, import, Compass
 - [docs/privacy.md](docs/privacy.md) — auth, exposure, data handling
 - [docs/architecture.md](docs/architecture.md) — components and data model
 - [docs/features/body-compass-as-built.md](docs/features/body-compass-as-built.md) — Compass status (done checklist)

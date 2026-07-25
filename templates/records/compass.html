@@ -39,6 +39,40 @@
 
 <section class="section">
   <h2>Position versus destination</h2>
+  <p class="meta">Current {{ position_rows.0.window_days|default:"trend" }}-day trend versus ideal range. Gap uses kg for weight and pp for composition.</p>
+  {% if position_rows %}
+  <div class="position-list">
+    {% for row in position_rows %}
+    <div class="position-row">
+      <div class="position-meta">
+        <strong>{{ row.label }}</strong>
+        <span class="num">
+          {% if row.value != None %}{{ row.value }}{{ row.unit }}{% else %}—{% endif %}
+        </span>
+        <span class="meta">
+          ideal {{ row.target_min }}–{{ row.target_max }}{{ row.unit }}
+          {% if row.gap != None %}
+            ·
+            {% if row.position == "aligned" %}aligned
+            {% elif row.gap > 0 %}+{{ row.gap }} {{ row.gap_unit }}
+            {% else %}{{ row.gap }} {{ row.gap_unit }}{% endif %}
+          {% endif %}
+        </span>
+      </div>
+      <div class="range-track" aria-hidden="true">
+        <div class="range-soft" style="left:{{ row.soft_start_pct }}%; width:{{ row.soft_width_pct }}%"></div>
+        <div class="range-ideal" style="left:{{ row.ideal_start_pct }}%; width:{{ row.ideal_width_pct }}%"></div>
+        {% if row.marker_pct != None %}
+        <div class="range-marker {% if row.position == 'aligned' %}is-aligned{% endif %}" style="left:{{ row.marker_pct }}%"></div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="meta">Configure target ranges to see position versus destination.</p>
+  {% endif %}
+
   <table class="table deltas">
     <thead>
       <tr>
@@ -138,6 +172,33 @@
   {% endif %}
 </section>
 {% endif %}
+
+<section class="section">
+  <h2>Opportunity impact</h2>
+  {% if impact.available %}
+  <div class="impact-list">
+    {% for bar in impact.bars %}
+    <div class="impact-item">
+      <div class="impact-meta">
+        <strong class="impact-label">{{ bar.title }}</strong>
+        {% if bar.current_alignment != None %}
+        <span class="meta num">{{ bar.current_alignment|floatformat:1 }} → {{ bar.simulated_alignment|floatformat:1 }}</span>
+        {% endif %}
+        <span class="impact-gain num">+{{ bar.alignment_gain }}</span>
+      </div>
+      <div class="impact-track" aria-hidden="true">
+        {% if bar.current_alignment != None %}
+        <div class="impact-current" style="width:{{ bar.start_pct }}%"></div>
+        {% endif %}
+        <div class="impact-fill" style="left:{{ bar.start_pct }}%;width:{{ bar.width_pct }}%"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="meta">{{ impact.message|default:"Insufficient data for impact simulation." }}</p>
+  {% endif %}
+</section>
 
 {% if compass.guidance %}
 <section class="section">

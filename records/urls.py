@@ -20,7 +20,6 @@ from .views import (
     quick_add,
     revoke_trusted_device,
     settings_view,
-    switch_profile,
 )
 
 urlpatterns = [
@@ -39,7 +38,6 @@ urlpatterns = [
     path("chart/", chart_page, name="chart"),
     path("api/chart-data/", chart_data, name="chart_data"),
     path("settings/", settings_view, name="settings"),
-    path("settings/switch-profile/", switch_profile, name="switch_profile"),
     path("settings/devices/<uuid:pk>/revoke/", revoke_trusted_device, name="revoke_device"),
     path("settings/devices/revoke-all/", logout_all_devices, name="logout_all_devices"),
     path("import/", import_page, name="import"),

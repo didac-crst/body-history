@@ -26,24 +26,24 @@
     {% endif %}
     · {{ compass.confidence }} confidence
   </p>
-  <table class="table deltas">
-    <thead>
-      <tr>
-        <th>Component</th>
-        <th class="num">Score</th>
-        <th>Direction</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for c in compass.components %}
-      <tr>
-        <td>{{ c.label }}</td>
-        <td class="num">{% if c.score != None %}{{ c.score }} / 100{% else %}—{% endif %}</td>
-        <td>{{ c.direction }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  {% if sparkline_points %}
+  <svg class="sparkline" viewBox="0 0 180 40" role="img" aria-label="Alignment sparkline">
+    <polyline fill="none" stroke="#0f6a5a" stroke-width="2.5" points="{{ sparkline_points }}"></polyline>
+  </svg>
+  {% endif %}
+  <div class="mini-bars">
+    {% for bar in component_bars %}
+    <div class="mini-bar-row">
+      <span>{{ bar.label }}</span>
+      <div class="mini-bar-track">
+        {% if bar.score != None %}
+        <div class="mini-bar-fill" style="width:{{ bar.score }}%"></div>
+        {% endif %}
+      </div>
+      <span class="num">{% if bar.score != None %}{{ bar.score }}{% else %}—{% endif %}</span>
+    </div>
+    {% endfor %}
+  </div>
   {% else %}
   <p class="meta"><a href="{% url 'settings' %}#targets">Configure target ranges in Settings</a> to unlock Target Alignment.</p>
   {% endif %}

@@ -18,6 +18,11 @@ class TimeStampedModel(models.Model):
 
 class Profile(TimeStampedModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="body_profile",
+    )
     display_name = models.TextField()
     height_cm = models.DecimalField(max_digits=5, decimal_places=2)
     timezone = models.TextField(default="Europe/Paris")

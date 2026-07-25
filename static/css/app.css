@@ -310,8 +310,125 @@ button.danger { background: var(--danger); }
   margin-top: 0.55rem;
 }
 
-.sim-results {
-  margin-top: 1rem;
+.position-list,
+.impact-list,
+.mini-bars {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.position-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+}
+
+.range-track {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(201, 210, 218, 0.55);
+  overflow: hidden;
+}
+
+.range-soft {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(15, 106, 90, 0.16);
+}
+
+.range-ideal {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(15, 106, 90, 0.38);
+}
+
+.range-marker {
+  position: absolute;
+  top: -3px;
+  width: 4px;
+  height: 20px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: #b45309;
+}
+
+.range-marker.is-aligned {
+  background: #0f6a5a;
+}
+
+.impact-row,
+.mini-bar-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1.4fr) 1fr auto;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.impact-item {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.impact-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  align-items: baseline;
+}
+
+.impact-meta .impact-label {
+  flex: 1 1 12rem;
+  font-weight: 600;
+}
+
+.impact-track,
+.mini-bar-track {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(201, 210, 218, 0.55);
+  overflow: hidden;
+}
+
+.impact-current {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(47, 74, 89, 0.22);
+  border-radius: inherit;
+}
+
+.impact-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: #0f6a5a;
+}
+
+.mini-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #0f6a5a;
+}
+
+.impact-gain {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.sparkline {
+  width: min(100%, 220px);
+  height: 44px;
+  display: block;
+  margin: 0.35rem 0 0.75rem;
 }
 
 .report {

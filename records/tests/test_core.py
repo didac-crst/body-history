@@ -14,19 +14,10 @@ from records.metrics import (
     same_local_date_exists,
     target_for_date,
 )
-from records.models import Measurement, Profile, ProfileTarget
+from records.models import Measurement, ProfileTarget
 
 
 pytestmark = pytest.mark.django_db
-
-
-@pytest.fixture
-def profile():
-    return Profile.objects.create(
-        display_name="Test",
-        height_cm=Decimal("181.00"),
-        timezone="Europe/Paris",
-    )
 
 
 def test_bmi_calculation():
@@ -216,8 +207,7 @@ def test_importer_records_invalid_rows_and_is_idempotent(tmp_path, profile):
     assert profile.measurements.count() == 2
 
 
-def test_csv_export_includes_derived_metrics(client, django_user_model, profile):
-    user = django_user_model.objects.create_user(username="u", password="pass")
+def test_csv_export_includes_derived_metrics(client, user, profile):
     client.force_login(user)
     Measurement.objects.create(
         profile=profile,

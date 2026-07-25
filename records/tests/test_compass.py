@@ -21,15 +21,6 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def profile():
-    return Profile.objects.create(
-        display_name="Test",
-        height_cm=Decimal("181.00"),
-        timezone="Europe/Paris",
-    )
-
-
-@pytest.fixture
 def target(profile):
     return ProfileTarget.objects.create(
         profile=profile,
@@ -213,8 +204,7 @@ def test_personal_targets_loaded_from_db_not_constants(profile, target):
     assert "72.00" not in source
 
 
-def test_compass_post_save_full_data(client, django_user_model, profile, target):
-    user = django_user_model.objects.create_user(username="u", password="pass")
+def test_compass_post_save_full_data(client, user, profile, target):
     client.force_login(user)
     # prior points for trend
     now = timezone.now()
@@ -240,8 +230,7 @@ def test_compass_post_save_full_data(client, django_user_model, profile, target)
     assert b"Primary opportunity" in response.content
 
 
-def test_compass_post_save_weight_only(client, django_user_model, profile, target):
-    user = django_user_model.objects.create_user(username="u2", password="pass")
+def test_compass_post_save_weight_only(client, user, profile, target):
     client.force_login(user)
     response = client.post(
         "/manual_import/",
@@ -297,8 +286,7 @@ def test_simulate_measurement_returns_opportunities(profile, target):
     assert result["milestones"]
 
 
-def test_compass_history_api(client, django_user_model, profile, target):
-    user = django_user_model.objects.create_user(username="hist", password="pass")
+def test_compass_history_api(client, user, profile, target):
     client.force_login(user)
     Measurement.objects.create(
         profile=profile,
@@ -314,8 +302,7 @@ def test_compass_history_api(client, django_user_model, profile, target):
     assert payload["count"] >= 1
 
 
-def test_compass_simulate_api(client, django_user_model, profile, target):
-    user = django_user_model.objects.create_user(username="sim", password="pass")
+def test_compass_simulate_api(client, user, profile, target):
     client.force_login(user)
     response = client.get(
         "/api/compass-simulate/?weight_kg=75.2&body_fat_percent=20.3&muscle_percent=35.4"
@@ -326,8 +313,7 @@ def test_compass_simulate_api(client, django_user_model, profile, target):
     assert "opportunities" in payload
 
 
-def test_compass_page_includes_chart_and_simulator(client, django_user_model, profile, target):
-    user = django_user_model.objects.create_user(username="page", password="pass")
+def test_compass_page_includes_chart_and_simulator(client, user, profile, target):
     client.force_login(user)
     response = client.get("/compass/")
     assert response.status_code == 200
@@ -337,10 +323,13 @@ def test_compass_page_includes_chart_and_simulator(client, django_user_model, pr
     assert b"Guidance" in response.content or b"Fitness signals" in response.content
 
 
-def test_switch_profile_isolates_data(client, django_user_model, profile, target):
-    user = django_user_model.objects.create_user(username="multi", password="pass")
+def test_user_cannot_access_other_users_compass_data(
+    client, user, profile, target, django_user_model
+):
     client.force_login(user)
-    other = Profile.objects.create(
+    other_user = django_user_model.objects.create_user(username="partner", password="pass")
+    Profile.objects.create(
+        user=other_user,
         display_name="Partner",
         height_cm=Decimal("165.00"),
         timezone="Europe/Paris",
@@ -352,19 +341,16 @@ def test_switch_profile_isolates_data(client, django_user_model, profile, target
         body_fat_percent=Decimal("20.00"),
         muscle_percent=Decimal("35.00"),
     )
-    response = client.post(
+    assert client.post(
         "/settings/switch-profile/",
-        {"profile_id": str(other.id), "next": "/compass/"},
-    )
-    assert response.status_code == 302
+        {"profile_id": str(other_user.body_profile.id), "next": "/compass/"},
+    ).status_code == 404
     compass = client.get("/compass/")
     assert compass.status_code == 200
-    # Partner has no measurements / may lack targets — should not show the other profile's 75kg as latest.
-    assert b"75.0" not in compass.content
+    assert b"75" in compass.content
 
 
-def test_post_save_includes_alignment_delta(client, django_user_model, profile, target):
-    user = django_user_model.objects.create_user(username="delta", password="pass")
+def test_post_save_includes_alignment_delta(client, user, profile, target):
     client.force_login(user)
     Measurement.objects.create(
         profile=profile,
@@ -387,13 +373,65 @@ def test_post_save_includes_alignment_delta(client, django_user_model, profile, 
     assert b"vs previous" in response.content
 
 
-def test_settings_shows_profiles_and_preview(client, django_user_model, profile, target):
-    user = django_user_model.objects.create_user(username="set", password="pass")
+def test_settings_shows_profile_and_preview(client, user, profile, target):
     client.force_login(user)
     response = client.get("/settings/")
     assert response.status_code == 200
-    assert b"Profiles" in response.content
+    assert b"Profile" in response.content
     assert b"Active target preview" in response.content or b"Add target version" in response.content
+
+
+def test_position_and_impact_chart_payloads(profile, target):
+    from records.charts import opportunity_impact, position_vs_target
+    from records.compass import evaluate_compass
+
+    Measurement.objects.create(
+        profile=profile,
+        measured_at=timezone.now(),
+        weight_kg=Decimal("75.20"),
+        body_fat_percent=Decimal("20.30"),
+        muscle_percent=Decimal("35.40"),
+    )
+    rows = position_vs_target(
+        profile,
+        ranges={
+            "weight_min": target.weight_min_kg,
+            "weight_max": target.weight_max_kg,
+            "fat_min": target.body_fat_min_percent,
+            "fat_max": target.body_fat_max_percent,
+            "muscle_min": target.muscle_min_percent,
+            "muscle_max": target.muscle_max_percent,
+        },
+    )
+    assert len(rows) == 3
+    assert rows[0]["marker_pct"] is not None
+    snap = evaluate_compass(profile)
+    impact = opportunity_impact(
+        [o for o in snap.opportunities],
+        current_alignment=float(snap.alignment) if snap.alignment is not None else None,
+    )
+    assert "available" in impact
+    if impact["available"] and impact["bars"] and snap.alignment is not None:
+        top = impact["bars"][0]
+        assert top["start_pct"] == pytest.approx(float(snap.alignment), abs=0.05)
+        assert top["width_pct"] == pytest.approx(top["alignment_gain"], abs=0.2)
+        assert top["start_pct"] + top["width_pct"] <= 100.5
+
+
+def test_compass_page_includes_decision_charts(client, user, profile, target):
+    client.force_login(user)
+    Measurement.objects.create(
+        profile=profile,
+        measured_at=timezone.now(),
+        weight_kg=Decimal("75.20"),
+        body_fat_percent=Decimal("20.30"),
+        muscle_percent=Decimal("35.40"),
+    )
+    response = client.get("/compass/")
+    assert response.status_code == 200
+    assert b"Position versus destination" in response.content
+    assert b"range-track" in response.content
+    assert b"Opportunity impact" in response.content
 
 
 def test_preferences_change_scoring(profile, target):

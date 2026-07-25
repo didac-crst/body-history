@@ -10,8 +10,12 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
+from django.contrib.auth import get_user_model
+
 from records.models import ProfileTarget
 from records.profiles import get_or_create_default_profile
+
+User = get_user_model()
 
 
 class Command(BaseCommand):
@@ -29,6 +33,10 @@ class Command(BaseCommand):
         parser.add_argument("--muscle-min", type=Decimal, required=True)
         parser.add_argument("--muscle-max", type=Decimal, required=True)
         parser.add_argument(
+            "--username",
+            help="UI user whose default profile receives the target (optional).",
+        )
+        parser.add_argument(
             "--close-previous",
             action="store_true",
             help="Set valid_to on open targets to the day before valid-from.",
@@ -36,7 +44,15 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        profile = get_or_create_default_profile()
+        user = None
+        if options.get("username"):
+            try:
+                user = User.objects.get(username=options["username"])
+            except User.DoesNotExist as exc:
+                raise CommandError(
+                    f"User '{options['username']}' not found"
+                ) from exc
+        profile = get_or_create_default_profile(user=user)
         valid_from = date.fromisoformat(options["valid_from"])
         for lo, hi, label in (
             (options["weight_min"], options["weight_max"], "weight"),

@@ -34,6 +34,7 @@ class CompassSnapshot:
     components: list[dict[str, Any]]
     primary_opportunity: dict[str, Any] | None
     secondary_opportunity: dict[str, Any] | None
+    opportunities: list[dict[str, Any]]
     target: dict[str, Any] | None
     latest: dict[str, Any] | None
     trend: dict[str, Any]
@@ -190,6 +191,7 @@ def evaluate_compass(
             components=[],
             primary_opportunity=primary,
             secondary_opportunity=None,
+            opportunities=[primary] if primary else [],
             target=_target_payload(target),
             latest=None,
             trend={},
@@ -264,6 +266,8 @@ def evaluate_compass(
     )
     primary = _opp_dict(opportunities[0] if opportunities else None)
     secondary = _opp_dict(opportunities[1] if len(opportunities) > 1 else None)
+    opp_rows = [_opp_dict(o) for o in opportunities[:5]]
+    opp_rows = [o for o in opp_rows if o is not None]
     confidence = _confidence(
         recent_count=recent_count,
         days_since=days_since,
@@ -309,6 +313,7 @@ def evaluate_compass(
         components=component_rows,
         primary_opportunity=primary,
         secondary_opportunity=secondary,
+        opportunities=opp_rows,
         target=_target_payload(target),
         latest={
             "id": str(latest.id),

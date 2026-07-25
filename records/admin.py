@@ -13,7 +13,9 @@ from .models import (
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("display_name", "height_cm", "timezone", "updated_at")
+    list_display = ("display_name", "user", "height_cm", "timezone", "updated_at")
+    list_filter = ("user",)
+    search_fields = ("display_name", "user__username")
 
 
 @admin.register(ProfileTarget)

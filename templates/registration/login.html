@@ -4,6 +4,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -48,7 +50,17 @@
       <section class="panel is-active">
         <h1>Sign in</h1>
         <p class="hint">Trusted devices stay signed in for 180 days.</p>
-        <form method="post">
+        {% if form_expired %}
+        <p class="errorlist" role="status">That sign-in page was out of date. Enter your password again.</p>
+        {% endif %}
+        {% if messages %}
+        <ul class="errorlist">
+          {% for message in messages %}
+          <li>{{ message }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <form method="post" action="{% url 'login' %}">
           {% csrf_token %}
           {{ form.non_field_errors }}
           <label>
@@ -68,5 +80,13 @@
       </section>
     </div>
   </main>
+  <script>
+    // Stale login HTML from bfcache/PWA restores an expired CSRF token.
+    window.addEventListener("pageshow", function (event) {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    });
+  </script>
 </body>
 </html>

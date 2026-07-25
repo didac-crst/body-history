@@ -30,6 +30,8 @@ Required keys (names only):
 DJANGO_SECRET_KEY
 DJANGO_ALLOWED_HOSTS
 DJANGO_CSRF_TRUSTED_ORIGINS
+DJANGO_SECURE_COOKIES
+DJANGO_BEHIND_PROXY
 POSTGRES_HOST
 POSTGRES_PORT
 POSTGRES_DB
@@ -52,9 +54,37 @@ After editing secrets:
 docker compose up -d --force-recreate
 ```
 
-## Bootstrap first UI user
+## Bootstrap / manage UI users
 
-Optional one-shot env vars in the secrets file:
+UI logins are Django users (hashed passwords in the app DB). They are **not**
+the same as `POSTGRES_USER` / `POSTGRES_PASSWORD` in the secrets file.
+
+Preferred way to create or maintain UI users:
+
+```sh
+docker compose exec body-history python manage.py manage_body_user add --superuser
+docker compose exec body-history python manage.py manage_body_user reset-password --username didac
+docker compose exec body-history python manage.py manage_body_user deactivate --username olduser
+docker compose exec body-history python manage.py manage_body_user activate --username olduser
+docker compose exec body-history python manage.py manage_body_user list
+```
+
+`add` is interactive by default (username, email, password via getpass, optional
+superuser + create profile for that user). Prefer the first account as
+`--superuser`; later accounts are usually normal users.
+
+For automation:
+
+```sh
+docker compose exec -e BH_TMP_PW='…' body-history \
+  python manage.py manage_body_user add \
+  --non-interactive --username newuser --password-env BH_TMP_PW
+```
+
+Never pass a plaintext password as a CLI positional argument. This command does
+not alter `POSTGRES_*` or the secrets file.
+
+Optional one-shot bootstrap env vars (only when the auth user table is empty):
 
 ```text
 DJANGO_BOOTSTRAP_ADMIN_USER=yourname
@@ -62,14 +92,8 @@ DJANGO_BOOTSTRAP_ADMIN_PASSWORD=replace-me
 DJANGO_BOOTSTRAP_ADMIN_EMAIL=optional@example.com
 ```
 
-The entrypoint creates that user only when the auth user table is empty.  
 After first login works, remove `DJANGO_BOOTSTRAP_ADMIN_PASSWORD` from the secrets file and recreate the container.
-
-Manual alternative:
-
-```sh
-docker compose exec body-history python manage.py createsuperuser
-```
+Prefer `manage_body_user` for all later user management.
 
 ## Import Excel workbook
 
@@ -82,7 +106,7 @@ flowchart TD
 ```
 
 1. Place the workbook at `/srv/satellite/data/body-history/imports/Pes.xlsx` (outside git).
-2. Sign in → **Excel import** (runs against the **active profile**).
+2. Sign in → **Excel import** (runs against your profile).
 3. **Dry run** first; confirm unique dates / ranges.
 4. **Import** (idempotent by file hash for the same profile).
 
@@ -101,10 +125,13 @@ flowchart LR
   s --> c["Post-save Compass"]
 ```
 
-Intended for “Add to Home Screen”. No links to other app features during entry.  
-After save, shows Target Alignment (including **Δ vs previous reading**), primary opportunity, and latest-vs-trend.  
-Still requires Django login; trusted-device cookie avoids repeated passwords on known phones.  
-Shows the active profile name in the header.
+Intended for “Add to Home Screen”. Focused entry UI with a **Close** control
+back to the dashboard.  
+After save, shows Target Alignment (including **Δ vs previous reading**),
+alignment sparkline, compact component bars, primary opportunity, and
+latest-vs-trend.  
+Still requires Django login; trusted-device cookie avoids repeated passwords on
+known phones. Shows the profile display name in the header.
 
 ## Tests
 
@@ -112,13 +139,11 @@ Shows the active profile name in the header.
 docker compose run --rm --entrypoint "" -e BODY_HISTORY_USE_SQLITE=1 body-history pytest
 ```
 
-## Profiles
+## Profile
 
-Create and switch people under **Settings → Profiles**, or use the nav profile dropdown when more than one exists.
-
-- Active profile is session-scoped.
-- Measurements, target versions, and algorithm prefs are per profile.
-- Excel import and Compass APIs use the active profile.
+Each UI user has one body profile (height, display name, prefs). Edit it under
+**Settings → Profile**. Measurements, target versions, and algorithm prefs belong
+to that profile. Excel import and Compass use it automatically.
 
 ## Body Compass
 
@@ -149,20 +174,34 @@ Under **Settings → Compass algorithm**:
 - soft/hard outer bands
 - trend / comparison windows
 
-These are not personal destinations. Defaults live in code; saving prefs writes `CompassPreferences` for the active profile.
+These are not personal destinations. Defaults live in code; saving prefs writes `CompassPreferences` for your profile.
 
 ### Charts and simulator
 
-On `/compass/`:
+Decision charts (no radar/spider):
 
-- Alignment history chart (default mode: **today’s target**; optional historical targets)
-- Component score toggles; overall line emphasised
-- Opportunity simulator + milestones + guidance
+| Chart | Where | What it shows |
+|-------|--------|----------------|
+| **Alignment History** | `/compass/` | Overall + weight/fat/muscle scores over time (overall line emphasised) |
+| **Position vs Target** | `/compass/` | Horizontal range bars: trend value vs ideal (+ soft band), gap in kg/pp |
+| **Opportunity Impact** | `/compass/` | Absolute 0–100 track; green segment is today → simulated; `+gain` is points |
+| **Mini sparkline + component bars** | Dashboard + `/manual_import/` post-save | Compact only — Close returns to dashboard |
+
+Opportunity impact gain is a counterfactual delta (e.g. after −0.5 pp fat), not a forecast.
+
+Alignment history controls:
+
+- Ranges: 30d / 90d / 1y / 5y / all
+- Target mode default: **today’s target** (optional: historical targets per date)
+
+Also on `/compass/`: interactive opportunity simulator, milestones, guidance, fitness signals.
 
 JSON APIs:
 
 - `/api/compass-history/?range=1y&mode=today|historical`
 - `/api/compass-simulate/?weight_kg=...&body_fat_percent=...&muscle_percent=...`
+
+Chart payloads are built in `records/charts.py`.
 
 Default soft/hard bands (unless prefs override): weight 1/3 kg; fat 2/6 pp; muscle 1.5/4 pp.  
 Default importances: weight 25% / fat 45% / muscle 30%.

@@ -347,6 +347,131 @@ records/
 
 Business logic must return structured data, not final HTML strings.
 
+## Compass Charts
+
+The Compass should include charts, but only charts that support decision-making. Do not turn the Compass page into a generic analytics dashboard.
+
+**Shipped:** see [body-compass-as-built.md](body-compass-as-built.md#compass-charts-as-built) for the implemented Alignment History, Position vs Target, Opportunity Impact, and mini-chart surfaces.
+
+### 1. Alignment History
+
+This is the primary Compass chart.
+
+Show time series for:
+
+```text
+Overall alignment
+Weight component
+Body-fat component
+Muscle component
+```
+
+Range selector:
+
+```text
+90 days
+1 year
+5 years
+All time
+```
+
+Purpose:
+
+```text
+Am I moving toward the target?
+```
+
+Rules:
+
+- use smoothed/trend values rather than raw daily jumps where possible;
+- historical alignment should use the target version active at each date by default;
+- if offering a mode that recalculates history against today's target, label it explicitly;
+- show missing component periods honestly rather than drawing misleading continuous lines;
+- keep the overall alignment visually dominant and component lines secondary.
+
+### 2. Position vs Target
+
+Use compact horizontal range bars, not a radar chart.
+
+Each metric should show:
+
+```text
+current trend value
+target range
+gap to target
+```
+
+Example:
+
+```text
+Weight      75.2 kg   [72.0 ----- 73.0]   +2.2 kg
+Body fat    20.3%     [15.0 ----- 16.5]   +3.8 pp
+Muscle      35.3%     [38.0 ----- 39.0]   -2.7 pp
+```
+
+Purpose:
+
+```text
+Where am I relative to the destination?
+```
+
+Rules:
+
+- target range should be visually clear;
+- current value should be a distinct marker;
+- values inside target range should be shown as aligned, not over-optimised;
+- use percentage-point units (`pp`) for body-fat and muscle gaps.
+
+### 3. Opportunity Impact
+
+Use a small ranked bar chart based on counterfactual simulations.
+
+Example:
+
+```text
+Reduce fat by 0.5 pp      +4.2 alignment
+Build muscle by 0.5 pp    +2.8 alignment
+Reduce weight by 0.5 kg   +0.9 alignment
+```
+
+Purpose:
+
+```text
+Which realistic change would improve target alignment most?
+```
+
+Rules:
+
+- rank by projected alignment gain;
+- do not show rejected or harmful scenarios as recommendations;
+- label this as simulation, not forecast;
+- if data is insufficient, replace chart with an insufficient-data state.
+
+### Dashboard and Mobile Mini-Charts
+
+The main dashboard and mobile post-save view should use mini versions only:
+
+```text
+Target Alignment sparkline
+Three compact component bars
+Primary opportunity summary
+```
+
+Do not show full chart controls in the mobile post-save panel.
+
+### Charts to Avoid
+
+Avoid radar/spider charts for the MVP.
+
+Reason:
+
+- they are hard to read precisely;
+- they imply the dimensions are symmetric and independent;
+- weight, body fat, and muscle interact and should not be treated as equivalent polar axes;
+- range bars and ranked impact bars better match the decision the user needs to make.
+
+---
+
 ## Dashboard UI
 
 Add a compact main dashboard card:
@@ -558,6 +683,7 @@ The feature is complete when the user can:
 8. Receive one primary direction and optional secondary direction.
 9. See why the direction was chosen.
 10. Simulate changes to weight, fat and muscle.
-11. Get a Maintain recommendation when target is reached.
-12. After saving a mobile measurement, immediately see a compact compass overview.
-13. Use the feature without being encouraged to optimise weight at the expense of body composition.
+11. See Alignment History, Position vs Target, and Opportunity Impact charts.
+12. Get a Maintain recommendation when target is reached.
+13. After saving a mobile measurement, immediately see a compact compass overview.
+14. Use the feature without being encouraged to optimise weight at the expense of body composition.

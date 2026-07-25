@@ -30,18 +30,6 @@
         <a href="{% url 'chart' %}">Chart</a>
         <a href="{% url 'import' %}">Excel import</a>
         <a href="{% url 'settings' %}">Settings</a>
-        {% if profiles and profiles|length > 1 %}
-        <form method="post" action="{% url 'switch_profile' %}" class="inline profile-switch">
-          {% csrf_token %}
-          <input type="hidden" name="next" value="{{ request.path }}">
-          <label class="sr-only" for="nav-profile">Profile</label>
-          <select id="nav-profile" name="profile_id" onchange="this.form.submit()">
-            {% for p in profiles %}
-            <option value="{{ p.id }}" {% if active_profile and p.id == active_profile.id %}selected{% endif %}>{{ p.display_name }}</option>
-            {% endfor %}
-          </select>
-        </form>
-        {% endif %}
         <form method="post" action="{% url 'logout' %}" class="inline">
           {% csrf_token %}
           <button type="submit" class="linkish">Logout</button>

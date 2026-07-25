@@ -107,21 +107,6 @@ class ProfileForm(forms.ModelForm):
         }
 
 
-class CreateProfileForm(forms.ModelForm):
-    class Meta:
-        model = Profile
-        fields = ["display_name", "height_cm", "timezone"]
-        widgets = {
-            "display_name": forms.TextInput(),
-            "timezone": forms.TextInput(),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if not self.is_bound:
-            self.initial.setdefault("timezone", "Europe/Paris")
-
-
 class ProfileTargetForm(forms.ModelForm):
     class Meta:
         model = ProfileTarget

@@ -21,9 +21,16 @@
         data-saved="{{ saved|yesno:'1,0' }}"
         data-error="{{ error|default:'' }}">
     <header class="quick-top">
-      <p class="brand">Body History</p>
-      {% if profile %}<p class="hint">{{ profile.display_name }}</p>{% endif %}
-      <p class="step-label" id="step-label">1 / 5</p>
+      <div class="quick-brand">
+        <p class="brand">Body History</p>
+        {% if profile %}<p class="hint">{{ profile.display_name }}</p>{% endif %}
+      </div>
+      <div class="quick-top-actions">
+        {% if not saved %}
+        <p class="step-label" id="step-label">1 / 5</p>
+        {% endif %}
+        <a class="quick-close" href="{% url 'dashboard' %}">Close</a>
+      </div>
     </header>
 
     {% if saved %}
@@ -53,6 +60,26 @@
           {% endif %}
         </p>
         <p class="hint">{{ compass.confidence }} confidence · {{ compass.direction }}</p>
+        {% if sparkline_points %}
+        <svg class="sparkline" viewBox="0 0 180 40" role="img" aria-label="Alignment sparkline">
+          <polyline fill="none" stroke="#0f6a5a" stroke-width="2.5" points="{{ sparkline_points }}"></polyline>
+        </svg>
+        {% endif %}
+        {% if component_bars %}
+        <div class="mini-bars">
+          {% for bar in component_bars %}
+          <div class="mini-bar-row">
+            <span>{{ bar.label }}</span>
+            <div class="mini-bar-track">
+              {% if bar.score != None %}
+              <div class="mini-bar-fill" style="width:{{ bar.score }}%"></div>
+              {% endif %}
+            </div>
+            <span>{% if bar.score != None %}{{ bar.score }}{% else %}—{% endif %}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
         {% else %}
         <p class="hint"><a href="{% url 'settings' %}#targets">Configure target ranges in Settings</a> to unlock alignment.</p>
         {% endif %}
