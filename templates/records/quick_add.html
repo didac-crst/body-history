@@ -1,0 +1,115 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Body History">
+  <meta name="theme-color" content="#e7edf2">
+  <title>Add · Body History</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/quick.css' %}">
+</head>
+<body class="{% if saved %}is-saved{% endif %}">
+  <main class="quick" id="quick-app"
+        data-today="{{ today }}"
+        data-saved="{{ saved|yesno:'1,0' }}"
+        data-error="{{ error|default:'' }}">
+    <header class="quick-top">
+      <p class="brand">Body History</p>
+      <p class="step-label" id="step-label">1 / 5</p>
+    </header>
+
+    {% if saved %}
+    <section class="panel success-panel is-active">
+      <h1>Saved</h1>
+      <dl class="review">
+        <div><dt>Weight</dt><dd>{{ saved_summary.weight_kg }} kg</dd></div>
+        <div><dt>Fat</dt><dd>{% if saved_summary.body_fat_percent %}{{ saved_summary.body_fat_percent }}%{% else %}—{% endif %}</dd></div>
+        <div><dt>Muscle</dt><dd>{% if saved_summary.muscle_percent %}{{ saved_summary.muscle_percent }}%{% else %}—{% endif %}</dd></div>
+        <div><dt>Date</dt><dd>{{ saved_summary.measured_on }}</dd></div>
+      </dl>
+      {% for warning in warnings %}
+      <p class="warn">{{ warning }}</p>
+      {% endfor %}
+      <a class="btn primary" href="{% url 'manual_import' %}">Add another</a>
+    </section>
+    {% else %}
+
+    <form method="post" id="quick-form" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="weight_kg" id="field-weight" value="{{ posted.weight_kg }}">
+      <input type="hidden" name="body_fat_percent" id="field-fat" value="{{ posted.body_fat_percent }}">
+      <input type="hidden" name="muscle_percent" id="field-muscle" value="{{ posted.muscle_percent }}">
+      <input type="hidden" name="measured_on" id="field-date" value="{{ posted.measured_on }}">
+
+      <section class="panel is-active" data-step="1">
+        <h1>Weight</h1>
+        <p class="hint">Kilograms</p>
+        <input class="big-input" id="input-weight" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="0.0" value="{{ posted.weight_kg }}" autofocus>
+        <p class="error" id="error-weight" hidden></p>
+        <div class="actions">
+          <button type="button" class="btn primary" data-next>Next</button>
+        </div>
+      </section>
+
+      <section class="panel" data-step="2" hidden>
+        <h1>Fat %</h1>
+        <p class="hint">Body fat percentage</p>
+        <input class="big-input" id="input-fat" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="optional" value="{{ posted.body_fat_percent }}">
+        <div class="actions">
+          <button type="button" class="btn ghost" data-back>Back</button>
+          <button type="button" class="btn secondary" data-skip>Skip</button>
+          <button type="button" class="btn primary" data-next>Next</button>
+        </div>
+      </section>
+
+      <section class="panel" data-step="3" hidden>
+        <h1>Muscle %</h1>
+        <p class="hint">Muscle percentage</p>
+        <input class="big-input" id="input-muscle" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="optional" value="{{ posted.muscle_percent }}">
+        <div class="actions">
+          <button type="button" class="btn ghost" data-back>Back</button>
+          <button type="button" class="btn secondary" data-skip>Skip</button>
+          <button type="button" class="btn primary" data-next>Next</button>
+        </div>
+      </section>
+
+      <section class="panel" data-step="4" hidden>
+        <h1>Date</h1>
+        <p class="hint">Defaults to today</p>
+        <input class="big-input date-input" id="input-date" type="date" value="{{ posted.measured_on }}">
+        <div class="actions">
+          <button type="button" class="btn ghost" data-back>Back</button>
+          <button type="button" class="btn primary" data-next>Next</button>
+        </div>
+      </section>
+
+      <section class="panel" data-step="5" hidden>
+        <h1>Review</h1>
+        <p class="hint">Confirm and save</p>
+        <dl class="review" id="review-list">
+          <div><dt>Weight</dt><dd id="review-weight">—</dd></div>
+          <div><dt>Fat</dt><dd id="review-fat">—</dd></div>
+          <div><dt>Muscle</dt><dd id="review-muscle">—</dd></div>
+          <div><dt>Date</dt><dd id="review-date">—</dd></div>
+        </dl>
+        {% if error %}
+        <p class="error">{{ error }}</p>
+        {% endif %}
+        <div class="actions">
+          <button type="button" class="btn ghost" data-back>Back</button>
+          <button type="submit" class="btn primary" id="save-btn">Save</button>
+        </div>
+      </section>
+    </form>
+    {% endif %}
+  </main>
+  <script src="{% static 'js/quick.js' %}"></script>
+</body>
+</html>

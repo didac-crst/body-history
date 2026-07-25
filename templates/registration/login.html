@@ -1,0 +1,72 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Body History">
+  <meta name="theme-color" content="#e7edf2">
+  <title>Sign in · Body History</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/quick.css' %}">
+  <style>
+    .login-wrap { display:flex; flex-direction:column; justify-content:center; flex:1; }
+    .login-wrap .panel { display:flex; }
+    .login-wrap label { display:grid; gap:0.4rem; margin-bottom:0.9rem; font-weight:600; }
+    .login-wrap input[type="text"],
+    .login-wrap input[type="password"] {
+      width:100%;
+      min-height:3rem;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:0.7rem 0.85rem;
+      font:inherit;
+      background:#fff;
+    }
+    .login-wrap .checkbox {
+      display:flex;
+      gap:0.65rem;
+      align-items:center;
+      font-weight:500;
+      color:var(--muted);
+      margin:0.4rem 0 1.1rem;
+    }
+    .login-wrap .errorlist { color:var(--danger); padding-left:1rem; }
+  </style>
+</head>
+<body>
+  <main class="quick">
+    <header class="quick-top">
+      <p class="brand">Body History</p>
+    </header>
+    <div class="login-wrap">
+      <section class="panel is-active">
+        <h1>Sign in</h1>
+        <p class="hint">Trusted devices stay signed in for 180 days.</p>
+        <form method="post">
+          {% csrf_token %}
+          {{ form.non_field_errors }}
+          <label>
+            Username
+            {{ form.username }}
+          </label>
+          <label>
+            Password
+            {{ form.password }}
+          </label>
+          <label class="checkbox">
+            {{ form.trust_device }}
+            <span>{{ form.trust_device.label }}</span>
+          </label>
+          <button type="submit" class="btn primary" style="width:100%">Continue</button>
+        </form>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

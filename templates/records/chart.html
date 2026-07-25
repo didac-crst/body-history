@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Chart · {{ app_name }}{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+{% endblock %}
+{% block content %}
+<section class="page-head row">
+  <div>
+    <h1>Trend</h1>
+    <p>Raw points with a smoothed trend. No forced line through every sparse measurement.</p>
+  </div>
+</section>
+
+<form class="filters" id="chart-controls">
+  <label>
+    Metric
+    <select id="metric">
+      <option value="weight_kg">Weight</option>
+      <option value="bmi">BMI</option>
+      <option value="body_fat_percent">Body fat %</option>
+      <option value="fat_mass_kg">Fat mass</option>
+      <option value="muscle_percent">Muscle %</option>
+    </select>
+  </label>
+  <label>
+    Range
+    <select id="range">
+      <option value="30d">30 days</option>
+      <option value="90d">90 days</option>
+      <option value="1y" selected>1 year</option>
+      <option value="5y">5 years</option>
+      <option value="all">All time</option>
+    </select>
+  </label>
+</form>
+
+<div id="chart" class="chart"></div>
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'js/chart.js' %}"></script>
+{% endblock %}

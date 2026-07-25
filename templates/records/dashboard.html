@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="page-head row">
+  <div>
+    <h1>Latest</h1>
+    <p>Current state, recent direction, and long-term context.</p>
+  </div>
+  <div class="actions">
+    <a class="button" href="{% url 'manual_import' %}">Manual import</a>
+  </div>
+</section>
+
+{% if not metrics.latest %}
+<p class="empty">No measurements yet. <a href="{% url 'import' %}">Import Pes.xlsx</a> or <a href="{% url 'manual_import' %}">add one</a>.</p>
+{% else %}
+<div class="stats">
+  <div>
+    <span class="label">Weight</span>
+    <strong>{{ metrics.latest.weight_kg }} kg</strong>
+  </div>
+  <div>
+    <span class="label">BMI</span>
+    <strong>{{ metrics.bmi }}</strong>
+  </div>
+  <div>
+    <span class="label">Body fat</span>
+    <strong>{% if metrics.latest.body_fat_percent %}{{ metrics.latest.body_fat_percent }}%{% else %}—{% endif %}</strong>
+  </div>
+  <div>
+    <span class="label">Fat mass</span>
+    <strong>{% if metrics.fat_mass_kg %}{{ metrics.fat_mass_kg }} kg{% else %}—{% endif %}</strong>
+  </div>
+  <div>
+    <span class="label">Muscle</span>
+    <strong>{% if metrics.latest.muscle_percent %}{{ metrics.latest.muscle_percent }}%{% else %}—{% endif %}</strong>
+  </div>
+  <div>
+    <span class="label">Days since</span>
+    <strong>{{ metrics.days_since }}</strong>
+  </div>
+</div>
+
+<section class="section">
+  <h2>Changes</h2>
+  <p class="meta">Absolute change versus the earlier window: weight in kg, fat and muscle in percentage points.</p>
+  <table class="table deltas">
+    <thead>
+      <tr>
+        <th>Window</th>
+        <th class="num">Weight (kg)</th>
+        <th class="num">Fat (pp)</th>
+        <th class="num">Muscle (pp)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for key, delta in metrics.deltas.items %}
+      <tr>
+        <td>{{ key }}</td>
+        <td class="num">{% if delta.weight_kg != None %}{{ delta.weight_kg }}{% else %}—{% endif %}</td>
+        <td class="num">{% if delta.body_fat_percent != None %}{{ delta.body_fat_percent }}{% else %}—{% endif %}</td>
+        <td class="num">{% if delta.muscle_percent != None %}{{ delta.muscle_percent }}{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<p class="meta">Latest measured {{ metrics.latest.measured_at }} · height {{ profile.height_cm }} cm
+{% if metrics.target %} · target BMI {{ metrics.target.target_bmi }}{% endif %}
+</p>
+<p class="actions">
+  <a class="button" href="{% url 'manual_import' %}">Manual import</a>
+  <a class="button secondary" href="{% url 'chart' %}">Open trend chart</a>
+</p>
+{% endif %}
+{% endblock %}

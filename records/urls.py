@@ -1,0 +1,38 @@
+from django.contrib.auth.decorators import login_required
+from django.urls import path
+
+from .views import (
+    BodyHistoryLoginView,
+    chart_data,
+    chart_page,
+    dashboard,
+    export_csv,
+    history,
+    import_page,
+    logout_all_devices,
+    logout_view,
+    measurement_create,
+    measurement_delete,
+    measurement_edit,
+    quick_add,
+    revoke_trusted_device,
+    settings_view,
+)
+
+urlpatterns = [
+    path("login/", BodyHistoryLoginView.as_view(), name="login"),
+    path("logout/", logout_view, name="logout"),
+    path("", login_required(dashboard), name="dashboard"),
+    path("manual_import/", quick_add, name="manual_import"),
+    path("measurements/new/", measurement_create, name="measurement_create"),
+    path("measurements/<uuid:pk>/edit/", measurement_edit, name="measurement_edit"),
+    path("measurements/<uuid:pk>/delete/", measurement_delete, name="measurement_delete"),
+    path("history/", history, name="history"),
+    path("history/export.csv", export_csv, name="export_csv"),
+    path("chart/", chart_page, name="chart"),
+    path("api/chart-data/", chart_data, name="chart_data"),
+    path("settings/", settings_view, name="settings"),
+    path("settings/devices/<uuid:pk>/revoke/", revoke_trusted_device, name="revoke_device"),
+    path("settings/devices/revoke-all/", logout_all_devices, name="logout_all_devices"),
+    path("import/", import_page, name="import"),
+]

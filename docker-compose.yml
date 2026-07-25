@@ -1,0 +1,17 @@
+name: body-history
+
+services:
+  body-history:
+    build: .
+    container_name: body-history
+    environment:
+      TZ: Europe/Paris
+      APP_TIMEZONE: Europe/Paris
+    env_file:
+      - /srv/satellite/secrets/body-history.env
+    ports:
+      - "3060:8000"
+    volumes:
+      - /srv/satellite/data/body-history/imports:/data/imports:ro
+      - /srv/satellite/data/body-history/exports:/data/exports
+    restart: unless-stopped

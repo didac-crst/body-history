@@ -1,0 +1,24 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+*.sqlite3
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Personal health data and local artefacts — never commit
+imports/
+exports/
+*.xlsx
+*.xls
+*.csv
+missing_recordings.txt
+missing_imports.txt
+/staticfiles/
+media/
+test.sqlite3

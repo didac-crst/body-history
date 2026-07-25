@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Delete measurement · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Delete measurement?</h1>
+  <p>{{ measurement.measured_at }} · {{ measurement.weight_kg }} kg</p>
+</section>
+<form method="post" class="stack">
+  {% csrf_token %}
+  <div class="actions">
+    <button type="submit" class="danger">Delete</button>
+    <a href="{% url 'history' %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

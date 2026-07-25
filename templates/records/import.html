@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Import · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Excel import</h1>
+  <p>Dry-run first, then import with row-level audit. Source workbook stays outside git.</p>
+</section>
+
+<form method="post" class="stack">
+  {% csrf_token %}
+  <label>
+    Filename in imports directory
+    <input type="text" name="filename" value="{{ form.filename.value|default:'Pes.xlsx' }}" list="files">
+    <datalist id="files">
+      {% for name in available %}
+      <option value="{{ name }}">
+      {% endfor %}
+    </datalist>
+  </label>
+  <div class="actions">
+    <button type="submit" name="action" value="dry_run">Dry run</button>
+    <button type="submit" name="action" value="import" class="secondary">Import</button>
+  </div>
+</form>
+
+{% if report %}
+<section class="section">
+  <h2>Verification report</h2>
+  <dl class="report">
+    <div><dt>File hash</dt><dd><code>{{ report.file_hash }}</code></dd></div>
+    <div><dt>Sheets</dt><dd>{{ report.sheets|join:", " }}</dd></div>
+    <div><dt>Source sheet</dt><dd>{{ report.source_sheet }}</dd></div>
+    <div><dt>Candidates</dt><dd>{{ report.candidate_count }}</dd></div>
+    <div><dt>Accepted / rejected</dt><dd>{{ report.accepted_count }} / {{ report.rejected_count }}</dd></div>
+    <div><dt>Date range</dt><dd>{{ report.date_range.first }} → {{ report.date_range.last }} ({{ report.date_range.unique_dates }} unique)</dd></div>
+    <div><dt>Weight range</dt><dd>{{ report.weight_range.min }} – {{ report.weight_range.max }} kg</dd></div>
+    <div><dt>Height</dt><dd>{% if report.height_cm %}{{ report.height_cm }} cm{% else %}—{% endif %}</dd></div>
+    <div><dt>Matches expected unique dates</dt><dd>{{ report.matches_expected_unique_dates }}</dd></div>
+    <div><dt>Formulas ignored</dt><dd>{{ report.formulas_ignored|join:", " }}</dd></div>
+    <div><dt>Missing body fat / muscle</dt><dd>{{ report.missing_values.body_fat_percent }} / {{ report.missing_values.muscle_percent }}</dd></div>
+    <div><dt>Duplicate local dates</dt><dd>{% if report.duplicate_local_dates %}{{ report.duplicate_local_dates|join:", " }}{% else %}none{% endif %}</dd></div>
+  </dl>
+  {% if report.invalid_values %}
+  <h3>Invalid rows</h3>
+  <ul>
+    {% for item in report.invalid_values|slice:":20" %}
+    <li>Row {{ item.source_row }}: {{ item.errors|join:"; " }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="section">
+  <h2>Import batches</h2>
+  <table class="table">
+    <thead>
+      <tr><th>When</th><th>File</th><th>Rows</th><th>Accepted</th><th>Rejected</th></tr>
+    </thead>
+    <tbody>
+      {% for b in batches %}
+      <tr>
+        <td>{{ b.imported_at }}</td>
+        <td>{{ b.filename }}</td>
+        <td>{{ b.row_count }}</td>
+        <td>{{ b.accepted_count }}</td>
+        <td>{{ b.rejected_count }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5">No imports yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

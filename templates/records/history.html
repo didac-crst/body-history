@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}History · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="page-head row">
+  <div>
+    <h1>History</h1>
+    <p>Browse, filter, and export measurements.</p>
+  </div>
+  <div class="actions">
+    <a class="button" href="{% url 'measurement_create' %}">Add</a>
+    <a class="button secondary" href="{% url 'export_csv' %}">Export CSV</a>
+  </div>
+</section>
+
+<form method="get" class="filters">
+  <label>
+    Source
+    <select name="source">
+      <option value="">All</option>
+      <option value="manual" {% if filters.source == "manual" %}selected{% endif %}>Manual</option>
+      <option value="import" {% if filters.source == "import" %}selected{% endif %}>Import</option>
+    </select>
+  </label>
+  <label>
+    Excluded
+    <select name="excluded">
+      <option value="">All</option>
+      <option value="0" {% if filters.excluded == "0" %}selected{% endif %}>Included only</option>
+      <option value="1" {% if filters.excluded == "1" %}selected{% endif %}>Excluded only</option>
+    </select>
+  </label>
+  <label>
+    Search notes
+    <input type="search" name="q" value="{{ filters.q }}">
+  </label>
+  <button type="submit">Filter</button>
+</form>
+
+<div class="table-wrap">
+<table class="table">
+  <thead>
+    <tr>
+      <th><a href="?sort={% if filters.sort == 'measured_at' %}-{% endif %}measured_at">Date</a></th>
+      <th><a href="?sort={% if filters.sort == 'weight_kg' %}-{% endif %}weight_kg">Weight</a></th>
+      <th>BMI</th>
+      <th><a href="?sort={% if filters.sort == 'body_fat_percent' %}-{% endif %}body_fat_percent">Fat %</a></th>
+      <th>Fat kg</th>
+      <th><a href="?sort={% if filters.sort == 'muscle_percent' %}-{% endif %}muscle_percent">Muscle %</a></th>
+      <th>Source</th>
+      <th>Notes</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr class="{% if row.measurement.is_excluded %}excluded{% endif %}">
+      <td>{{ row.measurement.measured_at|date:"Y-m-d H:i" }}</td>
+      <td>{{ row.measurement.weight_kg }}</td>
+      <td>{{ row.bmi|default:"—" }}</td>
+      <td>{{ row.measurement.body_fat_percent|default:"—" }}</td>
+      <td>{{ row.fat_mass_kg|default:"—" }}</td>
+      <td>{{ row.measurement.muscle_percent|default:"—" }}</td>
+      <td>{{ row.measurement.source }}{% if row.measurement.is_excluded %} · excluded{% endif %}</td>
+      <td>{{ row.measurement.notes|default:"" }}</td>
+      <td class="nowrap">
+        <a href="{% url 'measurement_edit' row.measurement.pk %}">Edit</a>
+        <a href="{% url 'measurement_delete' row.measurement.pk %}">Delete</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="9">No measurements.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

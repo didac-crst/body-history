@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>{{ title }}</h1>
+</section>
+<form method="post" class="stack form-grid">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+  {% for field in form %}
+  <label class="{% if field.name == 'notes' or field.name == 'conditions' or field.name == 'exclusion_reason' %}wide{% endif %}">
+    {{ field.label }}
+    {{ field }}
+    {% if field.errors %}<span class="error">{{ field.errors|striptags }}</span>{% endif %}
+  </label>
+  {% endfor %}
+  <div class="actions wide">
+    <button type="submit">Save</button>
+    {% if not measurement %}
+    <button type="submit" name="add_another" value="1" class="secondary">Save and add another</button>
+    {% endif %}
+    <a href="{% url 'history' %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

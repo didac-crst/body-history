@@ -1,0 +1,51 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Fraunces:opsz,wght@9..144,550;9..144,650&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="shell">
+    {% if user.is_authenticated %}
+    <header class="topbar">
+      <div class="brand-block">
+        <a class="brand" href="{% url 'dashboard' %}">{{ app_name }}</a>
+        <p class="subtitle">{{ app_subtitle }}</p>
+      </div>
+      <nav class="nav">
+        <a href="{% url 'dashboard' %}">Dashboard</a>
+        <a href="{% url 'manual_import' %}">Manual import</a>
+        <a href="{% url 'history' %}">History</a>
+        <a href="{% url 'chart' %}">Chart</a>
+        <a href="{% url 'import' %}">Excel import</a>
+        <a href="{% url 'settings' %}">Settings</a>
+        <form method="post" action="{% url 'logout' %}" class="inline">
+          {% csrf_token %}
+          <button type="submit" class="linkish">Logout</button>
+        </form>
+      </nav>
+    </header>
+    {% endif %}
+
+    {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}
+      <li class="{{ message.tags }}">{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
