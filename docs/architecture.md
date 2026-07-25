@@ -2,21 +2,31 @@
 
 ## Components
 
-```text
-Browser / iPhone homescreen
-        │
-        ▼
-body-history (Django + gunicorn) :3060 → :8000
-        │
-        ▼
-PostgreSQL (shared Timescale cluster) DB body_history / schema body
+```mermaid
+flowchart TB
+  client["Browser / iPhone homescreen"]
+  app["body-history<br/>Django + gunicorn<br/>host :3060 → container :8000"]
+  db["PostgreSQL shared cluster<br/>DB body_history · schema body"]
+  imports["Host data volume<br/>/srv/satellite/data/body-history/imports"]
+  exports["Host data volume<br/>/srv/satellite/data/body-history/exports"]
+
+  client --> app
+  app --> db
+  app -.-> imports
+  app -.-> exports
 ```
 
-Raw files stay on the host data volume:
+## Request surfaces
 
-```text
-/srv/satellite/data/body-history/imports
-/srv/satellite/data/body-history/exports
+```mermaid
+flowchart LR
+  login["/login/"] --> dash["/"]
+  dash --> manual["/manual_import/"]
+  dash --> history["/history/"]
+  dash --> chart["/chart/"]
+  dash --> excel["/import/"]
+  dash --> settings["/settings/"]
+  history --> csv["/history/export.csv"]
 ```
 
 ## Important routes
@@ -32,13 +42,57 @@ Raw files stay on the host data volume:
 | `/settings/` | Profile, targets, trusted devices |
 | `/login/` | Sign-in |
 
+## Manual import flow
+
+```mermaid
+flowchart LR
+  w["1. Weight"] --> f["2. Fat %"]
+  f --> m["3. Muscle %"]
+  m --> d["4. Date"]
+  d --> r["5. Review and save"]
+```
+
 ## Domain model (summary)
 
-- `profiles` — height, timezone, smoothing prefs
-- `profile_targets` — versioned targets by date range
-- `measurements` — weight / optional fat% / optional muscle%
-- `import_batches` + `measurement_import_rows` — audited Excel import
-- `trusted_devices` — hashed long-lived device tokens
+```mermaid
+erDiagram
+  PROFILE ||--o{ MEASUREMENT : has
+  PROFILE ||--o{ PROFILE_TARGET : has
+  PROFILE ||--o{ IMPORT_BATCH : has
+  IMPORT_BATCH ||--o{ MEASUREMENT_IMPORT_ROW : contains
+  MEASUREMENT ||--o| MEASUREMENT_IMPORT_ROW : may_link
+  USER ||--o{ TRUSTED_DEVICE : has
+
+  PROFILE {
+    uuid id
+    text display_name
+    numeric height_cm
+    text timezone
+  }
+  MEASUREMENT {
+    uuid id
+    timestamptz measured_at
+    numeric weight_kg
+    numeric body_fat_percent
+    numeric muscle_percent
+    text source
+  }
+  PROFILE_TARGET {
+    uuid id
+    date valid_from
+    date valid_to
+  }
+  IMPORT_BATCH {
+    uuid id
+    text file_hash
+    int accepted_count
+  }
+  TRUSTED_DEVICE {
+    uuid id
+    text token_hash
+    timestamptz expires_at
+  }
+```
 
 Derived metrics (BMI, fat mass kg, deltas) are computed in code, not stored as facts on each row.
 

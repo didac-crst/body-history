@@ -51,7 +51,15 @@ Only `.env.example` belongs in git for environment documentation.
 - Dashboard with latest values and period deltas (kg / percentage points)
 - History table, CSV export, trend chart
 - Excel dry-run + audited import
-- `/manual_import/` phone-friendly step flow: weight → fat % → muscle % → date → review
+- `/manual_import/` phone-friendly step flow:
+
+```mermaid
+flowchart LR
+  w["Weight"] --> f["Fat %"]
+  f --> m["Muscle %"]
+  m --> d["Date"]
+  d --> s["Review and save"]
+```
 
 ## Operations
 

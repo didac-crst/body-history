@@ -1,5 +1,7 @@
 # Documentation
 
+Diagrams in these docs use **Mermaid** only (no ASCII boxes).
+
 | Doc | Purpose |
 |-----|---------|
 | [operations.md](operations.md) | Deploy, secrets, bootstrap, import, tests |

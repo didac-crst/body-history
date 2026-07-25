@@ -73,6 +73,14 @@ docker compose exec body-history python manage.py createsuperuser
 
 ## Import Excel workbook
 
+```mermaid
+flowchart TD
+  place["Place workbook under<br/>data imports directory"] --> ui["Sign in → Excel import"]
+  ui --> dry["Dry run"]
+  dry --> review["Review verification report"]
+  review --> import["Import<br/>idempotent by file hash"]
+```
+
 1. Place the workbook at `/srv/satellite/data/body-history/imports/Pes.xlsx` (outside git).
 2. Sign in → **Excel import**.
 3. **Dry run** first; confirm unique dates / ranges.
@@ -83,6 +91,14 @@ Additional dated text blocks (if used) also belong under the data `imports/` dir
 ## Phone quick entry
 
 URL path: `/manual_import/`
+
+```mermaid
+flowchart LR
+  w["Weight"] --> f["Fat %"]
+  f --> m["Muscle %"]
+  m --> d["Date"]
+  d --> s["Review and save"]
+```
 
 Intended for “Add to Home Screen”. No links to other app features on that page.  
 Still requires Django login; trusted-device cookie avoids repeated passwords on known phones.

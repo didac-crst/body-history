@@ -13,6 +13,21 @@ This app stores personal health data.
 
 ## Authentication
 
+```mermaid
+flowchart TD
+  hit["Request arrives"] --> authed{"Django session<br/>authenticated?"}
+  authed -->|yes| app["Serve app"]
+  authed -->|no| cookie{"Trusted-device<br/>cookie present?"}
+  cookie -->|yes valid hash| login["Create session<br/>from device token"]
+  login --> app
+  cookie -->|no or invalid| form["/login/ form"]
+  form --> trust{"Trust this device?"}
+  trust -->|yes| issue["Issue HttpOnly cookie<br/>store hash only"]
+  trust -->|no| sessionOnly["Session only"]
+  issue --> app
+  sessionOnly --> app
+```
+
 - Primary: Django session login.
 - Convenience: trusted-device cookie (`HttpOnly`, `SameSite=Lax`, `Secure` when HTTPS).
 - Server stores only a hash of the device token.
